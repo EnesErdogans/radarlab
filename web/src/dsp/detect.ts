@@ -195,8 +195,10 @@ export class Detector {
         if (slot < 0) continue;
         const xr = rdRe[idx],
           xi = rdIm[idx];
+        // conjugated snapshot + forward FFT ≡ +j kernel Σ g_k e^{+j2πka/A}, matched to the
+        // −j steering vector of brief rev. 1 (same as the Python reference): θ > 0 → bin > A/2
         re[slot] = xr * c - xi * s;
-        im[slot] = xr * s + xi * c;
+        im[slot] = -(xr * s + xi * c);
       }
       fft.forward(re, im);
       let bi = 0,
@@ -214,8 +216,7 @@ export class Detector {
       // fftshift: unshifted bin b ↔ shifted (b + A/2) mod A
       let sb = ((bi + A / 2) % A) + off;
       det.angleBin = sb;
-      // negative spatial phase (brief rev. 1) → target at θ > 0 lands at bins below A/2
-      const sinT = Math.max(-1, Math.min(1, -(sb - A / 2) / (A * d.arraySpacing)));
+      const sinT = Math.max(-1, Math.min(1, (sb - A / 2) / (A * d.arraySpacing)));
       const th = Math.asin(sinT);
       det.angleDeg = (th * 180) / Math.PI;
       det.x = det.range * Math.sin(th);
@@ -281,7 +282,8 @@ export class Detector {
       }
       fft.forward(lr, li);
       const base = r * A;
-      for (let a = 0; a < A; a++) out[base + ((a + A / 2) % A)] = Math.max(0, lr[a]);
+      // +j kernel (brief rev. 1): bin a of the +j transform = bin −a of the forward FFT; then fftshift
+      for (let a = 0; a < A; a++) out[base + ((((A - a) % A) + A / 2) % A)] = Math.max(0, lr[a]);
     }
   }
 }

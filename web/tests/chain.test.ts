@@ -130,8 +130,8 @@ describe('angle estimation (TDM-MIMO)', () => {
       const m = e.runFrame();
       const best = m.detections.reduce((a, b) => (b.power > a.power ? b : a));
       expect(Math.abs(best.angleDeg - az)).toBeLessThan(1.0);
-      // rev. 1 negative spatial phase: positive angle ↔ angle bin below A/2
-      if (az !== 0) expect(Math.sign(32 - best.angleBin)).toBe(Math.sign(az));
+      // rev. 1: −j steering + +j angle kernel → positive angle ↔ angle bin above A/2
+      if (az !== 0) expect(Math.sign(best.angleBin - 32)).toBe(Math.sign(az));
       if (Math.abs(v) > 5) {
         // without TDM Doppler compensation the estimate is biased
         e.det.dets[0].velocity = 0;
@@ -148,4 +148,17 @@ describe('angle estimation (TDM-MIMO)', () => {
       }
     });
   }
+});
+
+describe('range–angle map orientation', () => {
+  it('peak lies at the target azimuth (θ > 0 → bin > A/2)', () => {
+    const e = engineFor(auto, [pt(20, 30, 5, 2)]);
+    e.runFrame();
+    const A = e.A;
+    const r = Math.round(20 / dA.rangeRes);
+    let best = 0;
+    for (let a = 1; a < A; a++) if (e.raP[r * A + a] > e.raP[r * A + best]) best = a;
+    const sinT = (best - A / 2) / (A * dA.arraySpacing);
+    expect(Math.abs((Math.asin(sinT) * 180) / Math.PI - 30)).toBeLessThan(2.5);
+  });
 });

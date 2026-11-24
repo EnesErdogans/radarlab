@@ -521,7 +521,7 @@ export class RAPanel extends CanvasPanel {
           if (y > 0 && r < rMax && r > 0) {
             const sn = x / r;
             if (Math.abs(sn) <= sMax) {
-              const ab = Math.round(A / 2 - sn * A * d.arraySpacing),
+              const ab = Math.round(sn * A * d.arraySpacing + A / 2),
                 rb = Math.round(r / d.rangeRes);
               if (ab >= 0 && ab < A && rb < nR) v = rb * A + ab;
             }
@@ -569,7 +569,7 @@ export class RAPanel extends CanvasPanel {
     const r = Math.hypot(x, y),
       th = (Math.atan2(x, y) * 180) / Math.PI;
     const rb = Math.round(r / f.d.rangeRes),
-      ab = Math.round(f.meta.A / 2 - Math.sin((th * Math.PI) / 180) * f.meta.A * f.d.arraySpacing);
+      ab = Math.round(Math.sin((th * Math.PI) / 180) * f.meta.A * f.d.arraySpacing + f.meta.A / 2);
     const v = rb < f.meta.nR && ab >= 0 && ab < f.meta.A ? f.bufs.raDb[rb * f.meta.A + ab].toFixed(1) + ' dB' : '';
     this.setReadout(`R = ${r.toFixed(1)} m · θ = ${th.toFixed(1)}° ${v ? '· ' + v : ''}`);
   }
