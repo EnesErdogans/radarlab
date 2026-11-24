@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "RadarLab: An Open-Source FMCW MIMO Radar Simulator with a Browser Twin, Validated Against Detection and Estimation Theory"
+abstract: >-
+  Open-source FMCW TDM-MIMO radar simulation and processing framework with a
+  NumPy reference implementation and an interactive TypeScript browser twin,
+  kept equivalent by cross-language golden vectors and validated against
+  closed-form detection and estimation theory.
+authors:
+  - family-names: "Erdoğan"
+    given-names: "Enes"
+    affiliation: "Department of Electrical and Electronics Engineering, Abdullah Gül University, Kayseri, Türkiye"
+version: "0.1.0"
+license: MIT
+repository-code: "https://github.com/EnesErdogans/radarlab"
+url: "https://eneserdogans.github.io/radarlab/"
+keywords:
+  - FMCW radar
+  - MIMO radar
+  - radar simulation
+  - CFAR
+  - micro-Doppler
+  - Cramér–Rao bound
+  - TI mmWave
