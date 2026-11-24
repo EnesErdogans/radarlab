@@ -420,7 +420,9 @@ export class CutPanel extends CanvasPanel {
     c.fillStyle = THEME.dim;
     c.textAlign = 'right';
     c.textBaseline = 'top';
-    c.fillText(t('cutAt', { d: f.meta.cutBin, v: ((f.meta.cutBin - f.meta.M / 2) * d.dv).toFixed(2) }), rect.x + rect.w - 4, rect.y + rect.h - 14);
+    let cap = t('cutAt', { d: f.meta.cutBin, v: ((f.meta.cutBin - f.meta.M / 2) * d.dv).toFixed(2) });
+    if (c.measureText(cap).width > rect.w - 8) cap = cap.split(' — ')[0]; // drop the hint on narrow panels
+    c.fillText(cap, rect.x + rect.w - 4, rect.y + rect.h - 14);
     c.fillText(t('cutGamma', { k: String(d.nVirt) }), rect.x + rect.w - 4, rect.y + 4);
   }
   protected hover(p: { x: number; y: number }): void {
