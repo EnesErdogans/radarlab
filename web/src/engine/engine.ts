@@ -2,7 +2,7 @@
 
 import { derive, type Derived, type RadarConfig, type SimSettings } from '../config/radar';
 import { getFFT, type FFT } from '../dsp/fft';
-import { makeNormWindow } from '../dsp/window';
+import { makeNormWindow, makeWindow } from '../dsp/window';
 import { Cfar2D } from '../dsp/cfar';
 import { Detector, type Detection } from '../dsp/detect';
 import { Spectrogram } from '../dsp/spectrogram';
@@ -108,6 +108,7 @@ export class Engine {
   readonly P: Float64Array; // nR×M
   readonly rangeP: Float64Array;
   readonly raP: Float64Array;
+  private raW: Float64Array;
   readonly cfar: Cfar2D;
   readonly det: Detector;
   readonly tracker: Tracker;
@@ -141,6 +142,7 @@ export class Engine {
     this.P = new Float64Array(nR * M);
     this.rangeP = new Float64Array(nR);
     this.raP = new Float64Array(nR * this.A);
+    this.raW = makeWindow(s.raWindow ?? 'rect', d.arrayLen);
     // brief rev. 1: α is Gamma(K)-exact (all four CFAR types) for K non-coherently summed channels
     this.cfar = new Cfar2D(nR, M, s.cfar, d.nVirt);
     this.det = new Detector(cfg, d, this.A, s.maxDetections);
@@ -326,7 +328,7 @@ export class Engine {
     t1 = now();
     this.timings.track = t1 - t0;
 
-    this.det.rangeAngle(this.rdRe, this.rdIm, this.raP);
+    this.det.rangeAngle(this.rdRe, this.rdIm, this.raP, this.raW);
     t0 = now();
     this.timings.raMap = t0 - t1;
 

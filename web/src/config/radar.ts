@@ -43,7 +43,7 @@ export interface Derived {
   arraySpacing: number; // minimum spacing of the virtual ULA [wavelengths]
   angleIdx: Int32Array; // ULA slot of each virtual channel (−1 = not used for azimuth)
   arrayLen: number; // max index + 1
-  angleResDeg: number; // ≈ asin(1/(L·d)) at boresight (Rayleigh, uniform array)
+  angleResDeg: number; // Δθ ≈ 1/(L·d) rad at boresight (Rayleigh, uniform array; same as README Table 2)
   dataRate: number; // bytes/s for 16-bit I/Q samples
   fovDeg: number; // unambiguous FOV half-angle (|sinθ| ≤ 1/(2d))
 }
@@ -90,7 +90,7 @@ export function derive(cfg: RadarConfig): Derived {
     arrayLen = Math.max(arrayLen, angleIdx[k] + 1);
   }
   const aperture = arrayLen * dmin;
-  const angleResDeg = (Math.asin(Math.min(1, 1 / aperture)) * 180) / Math.PI;
+  const angleResDeg = (Math.min(Math.PI / 2, 1 / aperture) * 180) / Math.PI;
   return {
     lambda,
     nTx,
@@ -162,7 +162,8 @@ export interface SimSettings {
   rangeWindow: WindowType;
   dopplerWindow: WindowType;
   cfar: CfarParams;
-  cfarExact: boolean; // OS-CFAR without noise-floor prefilter
+  cfarExact: boolean; // OS-CFAR without the block prefilter (identical result, slower; tests)
+  raWindow: WindowType; // angle window of the range–angle map (Python reference default: Hann)
   angleFft: number;
   maxDetections: number;
 }
@@ -183,6 +184,7 @@ export function defaultSettings(): SimSettings {
     dopplerWindow: 'hann',
     cfar: { type: 'CA', pfa: 1e-5, guardR: 2, guardD: 2, trainR: 8, trainD: 4, osRank: 0.75 },
     cfarExact: false,
+    raWindow: 'hann',
     angleFft: 64,
     maxDetections: 256,
   };

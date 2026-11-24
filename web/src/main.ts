@@ -521,6 +521,7 @@ function buildEditors(): void {
     { kind: 'chk', label: t('mtiL'), get: () => s.mti, set: (v) => (s.mti = v) },
     { kind: 'sel', label: t('rwinL'), opts: wins, get: () => s.rangeWindow, set: (v) => (s.rangeWindow = v as WindowType) },
     { kind: 'sel', label: t('dwinL'), opts: wins, get: () => s.dopplerWindow, set: (v) => (s.dopplerWindow = v as WindowType) },
+    { kind: 'sel', label: t('awinL'), opts: wins, get: () => s.raWindow, set: (v) => (s.raWindow = v as WindowType) },
     { kind: 'h', label: 'CFAR' },
     {
       kind: 'sel',

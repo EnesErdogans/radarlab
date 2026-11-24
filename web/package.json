@@ -1,6 +1,6 @@
 {
   "name": "radarlab",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Interactive in-browser FMCW radar simulator: range-Doppler, CFAR, MIMO angle, Kalman tracking and micro-Doppler.",
   "scripts": {
     "dev": "vite",

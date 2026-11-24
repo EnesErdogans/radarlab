@@ -188,6 +188,9 @@ export class Cfar2D {
   private wExt = 0;
   private buf: Float64Array;
   private tmp: Float64Array;
+  private osN: Int32Array;
+  private osK: Int32Array;
+  private osA: Float64Array;
   readonly out: CfarOutput;
   private alphas: AlphaCache;
   private params: CfarParams;
@@ -199,7 +202,12 @@ export class Cfar2D {
     this.alphas = new AlphaCache(p, gammaK);
     this.sat = new Float64Array(0);
     this.buf = new Float64Array(4096);
-    this.tmp = new Float64Array(nR * M);
+    const wr = p.guardR + p.trainR,
+      wd = Math.min(p.guardD + p.trainD, (M - 1) >> 1);
+    this.tmp = new Float64Array(Math.max(1, Math.min(nR, 8 + 2 * wr) * Math.min(M, 8 + 2 * wd)));
+    this.osN = new Int32Array(nR);
+    this.osK = new Int32Array(nR);
+    this.osA = new Float64Array(nR);
     this.out = { thr: new Float64Array(nR * M), noise: new Float64Array(nR * M), mask: new Uint8Array(nR * M), count: 0 };
   }
 
@@ -331,47 +339,88 @@ export class Cfar2D {
     const maxN = (2 * wr + 1) * (2 * wd + 1);
     if (this.buf.length < maxN) this.buf = new Float64Array(maxN);
     const buf = this.buf;
-    let skip = -Infinity;
-    if (!exact) {
-      // noise-floor prefilter: the local k-th order statistic is (in practice)
-      // never below the global 10 % quantile, so cells with P ≤ α·floor cannot pass.
-      this.tmp.set(P);
-      const q = quickselect(this.tmp, P.length, Math.floor(0.1 * P.length));
-      const nFull = maxN - (2 * p.guardR + 1) * (2 * gd + 1);
-      const kFull = osRankIndex(nFull, p.osRank);
-      skip = this.alphas.get('OS', nFull, kFull) * q;
-    }
-    let count = 0;
+    // per-row training-cell count, rank and α (only range is clipped; Doppler is circular)
+    const nRow = this.osN,
+      kRow = this.osK,
+      aRow = this.osA;
     for (let r = 0; r < nR; r++) {
       const r0 = Math.max(0, r - wr),
         r1 = Math.min(nR - 1, r + wr);
-      for (let d = 0; d < M; d++) {
-        const i = r * M + d;
-        if (P[i] <= skip) {
-          thr[i] = NaN;
-          noise[i] = NaN;
-          continue;
-        }
-        let n = 0;
-        for (let rr = r0; rr <= r1; rr++) {
-          const inG = Math.abs(rr - r) <= p.guardR;
-          const row = rr * M;
-          for (let dd = -wd; dd <= wd; dd++) {
-            if (inG && Math.abs(dd) <= gd) continue;
-            let c = d + dd;
-            if (c < 0) c += M;
-            else if (c >= M) c -= M;
-            buf[n++] = P[row + c];
+      const g0 = Math.max(0, r - p.guardR),
+        g1 = Math.min(nR - 1, r + p.guardR);
+      const n = (r1 - r0 + 1) * (2 * wd + 1) - (g1 - g0 + 1) * (2 * gd + 1);
+      nRow[r] = n;
+      kRow[r] = osRankIndex(n, p.osRank);
+      aRow[r] = this.alphas.get('OS', n, kRow[r]);
+    }
+    let count = 0;
+    // Exact block prefilter (UI mode): for a block of CUTs let U be the union of their
+    // windows. Every CUT's training set S ⊂ U, hence x_(k)(S) ≥ x_(k)(U) ≥ x_(k*)(U) with
+    // k* = min k over the block, and its threshold ≥ α_min·x_(k*)(U). Cells with
+    // P ≤ that bound cannot be detections and are skipped (thr = NaN) — identical
+    // detections to the exact mode by construction (no noise-floor assumption).
+    const BR = 8,
+      BD = 8;
+    const tmp = this.tmp;
+    for (let rb = 0; rb < nR; rb += BR) {
+      const re = Math.min(nR, rb + BR);
+      let bound = -Infinity;
+      for (let db = 0; db < M; db += BD) {
+        const de = Math.min(M, db + BD);
+        if (!exact) {
+          let kMin = Infinity,
+            aMin = Infinity;
+          for (let r = rb; r < re; r++) {
+            if (kRow[r] < kMin) kMin = kRow[r];
+            if (aRow[r] < aMin) aMin = aRow[r];
           }
+          const u0 = Math.max(0, rb - wr),
+            u1 = Math.min(nR - 1, re - 1 + wr);
+          const span = Math.min(M, de - db + 2 * wd);
+          let m = 0;
+          for (let rr = u0; rr <= u1; rr++) {
+            const row = rr * M;
+            for (let j = 0; j < span; j++) {
+              let c = db - wd + j;
+              if (c < 0) c += M;
+              else if (c >= M) c -= M;
+              tmp[m++] = P[row + c];
+            }
+          }
+          bound = aMin * quickselect(tmp, m, kMin - 1);
         }
-        const k = osRankIndex(n, p.osRank);
-        const xk = quickselect(buf, n, k - 1);
-        const t = this.alphas.get('OS', n, k) * xk;
-        thr[i] = t;
-        noise[i] = xk;
-        if (P[i] > t) {
-          mask[i] = 1;
-          count++;
+        for (let r = rb; r < re; r++) {
+          const r0 = Math.max(0, r - wr),
+            r1 = Math.min(nR - 1, r + wr);
+          for (let d = db; d < de; d++) {
+            const i = r * M + d;
+            if (P[i] <= bound) {
+              thr[i] = NaN;
+              noise[i] = NaN;
+              continue;
+            }
+            let n = 0;
+            for (let rr = r0; rr <= r1; rr++) {
+              const inG = Math.abs(rr - r) <= p.guardR;
+              const row = rr * M;
+              for (let dd = -wd; dd <= wd; dd++) {
+                if (inG && Math.abs(dd) <= gd) continue;
+                let c = d + dd;
+                if (c < 0) c += M;
+                else if (c >= M) c -= M;
+                buf[n++] = P[row + c];
+              }
+            }
+            const k = kRow[r];
+            const xk = quickselect(buf, n, k - 1);
+            const t = aRow[r] * xk;
+            thr[i] = t;
+            noise[i] = xk;
+            if (P[i] > t) {
+              mask[i] = 1;
+              count++;
+            }
+          }
         }
       }
     }

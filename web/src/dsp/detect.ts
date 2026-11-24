@@ -51,6 +51,7 @@ export class Detector {
   private lagIm: Float64Array;
   private xr: Float64Array;
   private xi: Float64Array;
+  private raAcc = new Float64Array(0);
 
   constructor(cfg: RadarConfig, d: Derived, nAngle = 64, maxDet = 256) {
     this.cfg = cfg;
@@ -225,10 +226,14 @@ export class Detector {
   }
 
   /**
-   * Range-angle power map (fftshifted angle bins, A per range bin), computed as
-   * Σ_d |FFT_A(compensated x_d)|² via the lag-domain (spatial autocorrelation) identity.
+   * Range-angle power map (fftshifted angle bins, A per range bin):
+   * out[r, a] = Σ_d |Σ_k w_k·x̃_k[r,d]·e^{+j2π·slot_k·a/A}|² / (Σw)², x̃ = TDM-compensated with the
+   * bin-centre velocity of Doppler bin d, w = window over the L ULA slots (periodic; rect if
+   * omitted) — the same definition and scaling as Python `range_angle_map`. Computed via the
+   * lag-domain (spatial autocorrelation) identity when 2L−1 ≤ A, otherwise by a direct
+   * zero-padded FFT per Doppler bin (L > A is rejected: the spectrum would be undersampled).
    */
-  rangeAngle(rdRe: Float64Array, rdIm: Float64Array, out: Float64Array): void {
+  rangeAngle(rdRe: Float64Array, rdIm: Float64Array, out: Float64Array, window?: Float64Array): void {
     const d = this.d,
       A = this.A,
       M = this.M,
@@ -242,18 +247,26 @@ export class Detector {
     const idx = d.angleIdx;
     const nRx = d.nRx;
     const L = d.arrayLen;
+    if (L > A) throw new Error(`rangeAngle: ULA length ${L} > angle FFT size ${A}`);
+    if (window && window.length !== L) throw new Error(`rangeAngle: window length ${window.length} != ULA length ${L}`);
+    let sw = 0;
+    for (let l = 0; l < L; l++) sw += window ? window[l] : 1;
+    const norm = 1 / (sw * sw);
     const canLag = 2 * L - 1 <= A;
+    const acc = canLag ? null : this.raAcc.length >= A ? this.raAcc : (this.raAcc = new Float64Array(A));
     for (let r = 0; r < nR; r++) {
       lr.fill(0);
       li.fill(0);
+      if (acc) acc.fill(0);
       for (let dd = 0; dd < M; dd++) {
         for (let k = 0; k < K; k++) {
           const t = (k / nRx) | 0;
           const j = (k * nR + r) * M + dd;
           const cr = this.compRe[t * M + dd],
             ci = this.compIm[t * M + dd];
-          const a = rdRe[j],
-            b = rdIm[j];
+          const w = window && idx[k] >= 0 ? window[idx[k]] : 1;
+          const a = rdRe[j] * w,
+            b = rdIm[j] * w;
           xr[k] = a * cr - b * ci;
           xi[k] = a * ci + b * cr;
         }
@@ -278,12 +291,28 @@ export class Detector {
               }
             }
           }
+        } else {
+          // direct: +j kernel = conjugate input + forward FFT (|·|² unchanged), accumulate power
+          lr.fill(0);
+          li.fill(0);
+          for (let k = 0; k < K; k++) {
+            if (idx[k] < 0) continue;
+            lr[idx[k]] = xr[k];
+            li[idx[k]] = -xi[k];
+          }
+          fft.forward(lr, li);
+          for (let a = 0; a < A; a++) acc![a] += lr[a] * lr[a] + li[a] * li[a];
         }
       }
-      fft.forward(lr, li);
       const base = r * A;
+      if (acc) {
+        // conj-input forward FFT bin a ≡ +j-kernel bin a; fftshift
+        for (let a = 0; a < A; a++) out[base + ((a + A / 2) % A)] = acc[a] * norm;
+        continue;
+      }
+      fft.forward(lr, li);
       // +j kernel (brief rev. 1): bin a of the +j transform = bin −a of the forward FFT; then fftshift
-      for (let a = 0; a < A; a++) out[base + ((((A - a) % A) + A / 2) % A)] = Math.max(0, lr[a]);
+      for (let a = 0; a < A; a++) out[base + ((((A - a) % A) + A / 2) % A)] = Math.max(0, lr[a]) * norm;
     }
   }
 }

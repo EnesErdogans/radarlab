@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { parabolic } from '../src/dsp/detect';
 import { FFT, dft } from '../src/dsp/fft';
 import { makeWindow } from '../src/dsp/window';
 import { mulberry32 } from '../src/sim/rng';
@@ -113,5 +114,14 @@ describe('derived parameters', () => {
     const d = derive(c);
     expect(d.rMax).toBeCloseTo(24.98, 1);
     expect(d.nRangeBins).toBe(128);
+  });
+});
+
+describe('parabolic interpolation convention', () => {
+  it('vertex offset at a maximum, clipped to ±0.5; 0 at a non-maximum (den ≥ 0)', () => {
+    expect(parabolic(1, 2, 1)).toBeCloseTo(0, 15);
+    expect(parabolic(1, 2, 1.5)).toBeCloseTo(0.5 * (1 - 1.5) / (1 - 4 + 1.5), 15);
+    expect(parabolic(0, 1, 5)).toBe(0); // den = 3 > 0 (not a maximum); Python clips to ±0.5 here
+    expect(parabolic(-10, 0, -0.01)).toBeLessThanOrEqual(0.5);
   });
 });

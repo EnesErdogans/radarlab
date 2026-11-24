@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { PRESETS, defaultSettings, derive, type RadarConfig, type SimSettings } from '../src/config/radar';
 import { Engine } from '../src/engine/engine';
 import { Synthesizer, type PointScatterer } from '../src/sim/synth';
+import { Detector } from '../src/dsp/detect';
+import { makeWindow } from '../src/dsp/window';
 
 const auto = PRESETS.automotive.cfg;
 const dA = derive(auto);
@@ -160,5 +162,61 @@ describe('range–angle map orientation', () => {
     for (let a = 1; a < A; a++) if (e.raP[r * A + a] > e.raP[r * A + best]) best = a;
     const sinT = (best - A / 2) / (A * dA.arraySpacing);
     expect(Math.abs((Math.asin(sinT) * 180) / Math.PI - 30)).toBeLessThan(2.5);
+  });
+});
+
+describe('range–angle map definition (lag-domain and direct paths)', () => {
+  // brute force: out[r, shift(a)] = Σ_d |Σ_k w_slot·x̃_k e^{+j2π·slot·a/A}|² / (Σw)²
+  function brute(e: Engine, A: number, w: Float64Array, r: number): Float64Array {
+    const d = e.d,
+      M = e.cfg.nChirps,
+      nR = d.nRangeBins;
+    const out = new Float64Array(A);
+    let sw = 0;
+    for (const x of w) sw += x;
+    for (let dd = 0; dd < M; dd++) {
+      const v = (dd - M / 2) * d.dv;
+      for (let a = 0; a < A; a++) {
+        let sr = 0,
+          si = 0;
+        for (let k = 0; k < d.nVirt; k++) {
+          const sl = d.angleIdx[k];
+          if (sl < 0) continue;
+          const t = Math.floor(k / d.nRx);
+          const j = (k * nR + r) * M + dd;
+          const ph = -2 * Math.PI * ((2 * v) / d.lambda) * t * e.cfg.chirpPeriod + (2 * Math.PI * sl * a) / A;
+          const c = Math.cos(ph),
+            s = Math.sin(ph);
+          sr += w[sl] * (e.rdRe[j] * c - e.rdIm[j] * s);
+          si += w[sl] * (e.rdRe[j] * s + e.rdIm[j] * c);
+        }
+        out[(a + A / 2) % A] += (sr * sr + si * si) / (sw * sw);
+      }
+    }
+    return out;
+  }
+  const e = engineFor(auto, [pt(20, 30, 5, 2), pt(20.3, -12, -3, 1)]);
+  e.synthesizeAndTransform(true);
+  const r = Math.round(20 / dA.rangeRes);
+  for (const [A, win] of [
+    [64, 'rect'],
+    [64, 'hann'],
+    [8, 'hann'], // 2L−1 > A → direct path
+  ] as const) {
+    it(`A=${A}, ${win} window`, () => {
+      const L = dA.arrayLen;
+      const w = makeWindow(win, L);
+      const det = new Detector(auto, dA, A);
+      const out = new Float64Array(dA.nRangeBins * A);
+      det.rangeAngle(e.rdRe, e.rdIm, out, w);
+      const ref = brute(e, A, w, r);
+      let mx = 0;
+      for (const x of ref) mx = Math.max(mx, x);
+      for (let a = 0; a < A; a++) expect(Math.abs(out[r * A + a] - ref[a]) / mx, `bin ${a}`).toBeLessThan(1e-12);
+    });
+  }
+  it('rejects a ULA longer than the angle FFT', () => {
+    const det = new Detector(auto, dA, 4);
+    expect(() => det.rangeAngle(e.rdRe, e.rdIm, new Float64Array(dA.nRangeBins * 4))).toThrow();
   });
 });

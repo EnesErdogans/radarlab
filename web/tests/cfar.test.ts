@@ -144,22 +144,51 @@ describe('CFAR masking: OS vs CA', () => {
   });
 });
 
-describe('OS-CFAR UI prefilter is safe', () => {
-  it('gives the same detections as exact OS on the automotive scene', () => {
-    const pr = PRESETS.automotive;
-    const s = { ...defaultSettings(), ...pr.settings, clutter: true };
-    const e = new Engine(pr.cfg, s, defaultScene('automotive'));
-    e.synthesizeAndTransform();
-    const c = new Cfar2D(e.d.nRangeBins, pr.cfg.nChirps, { ...s.cfar, type: 'OS' });
-    const exact = c.run(e.P, 'OS', true).mask.slice();
-    const fast = c.run(e.P, 'OS', false).mask;
+describe('OS-CFAR UI block prefilter is exact', () => {
+  const same = (c: Cfar2D, P: Float64Array) => {
+    const ex = c.run(P, 'OS', true);
+    const exMask = ex.mask.slice(),
+      exThr = ex.thr.slice();
+    const fast = c.run(P, 'OS', false);
     let diff = 0,
-      n = 0;
-    for (let i = 0; i < exact.length; i++) {
-      diff += exact[i] !== fast[i] ? 1 : 0;
-      n += exact[i];
+      n = 0,
+      thrDiff = 0;
+    for (let i = 0; i < exMask.length; i++) {
+      diff += exMask[i] !== fast.mask[i] ? 1 : 0;
+      n += exMask[i];
+      if (!isNaN(fast.thr[i]) && fast.thr[i] !== exThr[i]) thrDiff++;
     }
-    expect(n).toBeGreaterThan(5);
-    expect(diff).toBe(0);
+    return { diff, n, thrDiff };
+  };
+  for (const id of ['automotive', 'drone', 'micro'] as const)
+    for (const mti of [true, false])
+      it(`${id} (MTI ${mti ? 'on' : 'off'}, clutter): same detections and thresholds as exact OS`, () => {
+        const pr = PRESETS[id];
+        const s = { ...defaultSettings(), ...pr.settings, clutter: true, mti };
+        const e = new Engine(pr.cfg, s, defaultScene(id));
+        e.synthesizeAndTransform();
+        const c = new Cfar2D(e.d.nRangeBins, pr.cfg.nChirps, { ...s.cfar, type: 'OS' }, e.d.nVirt);
+        const r = same(c, e.P);
+        expect(r.n).toBeGreaterThan(0);
+        expect(r.diff).toBe(0);
+        expect(r.thrDiff).toBe(0);
+      });
+  it('weak target in a deep local noise notch (where a global-quantile prefilter fails)', () => {
+    const nR = 128,
+      M = 64;
+    const g = new Gaussian(9);
+    const P = new Float64Array(nR * M);
+    for (let i = 0; i < P.length; i++) {
+      const a = g.next(),
+        b = g.next();
+      // columns 28..36: 40 dB below the rest (like an MTI notch around zero Doppler)
+      const d = i % M;
+      P[i] = 0.5 * (a * a + b * b) * (d >= 28 && d <= 36 ? 1e-4 : 1);
+    }
+    P[70 * M + 32] = 0.05; // 27 dB above the notch floor, 13 dB below the global floor
+    const c = new Cfar2D(nR, M, { type: 'OS', pfa: 1e-5, guardR: 2, guardD: 1, trainR: 8, trainD: 3, osRank: 0.75 });
+    const r = same(c, P);
+    expect(c.run(P, 'OS', false).mask[70 * M + 32]).toBe(1);
+    expect(r.diff).toBe(0);
   });
 });
