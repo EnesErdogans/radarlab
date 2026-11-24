@@ -36,7 +36,10 @@ Why two implementations: Python is the reference for research/paper/real data; T
 - TDM-MIMO timing: chirp start time of chirp m from TX t: t_{m,t} = m·Te + t·Tc. ADC sample n at t_{m,t} + adcStartTime + n/fs.
 - Beat (IF) signal of one point scatterer, complex IQ, before noise/impairments:
   τ(t) = 2R(t)/c, with R(t) linear within a chirp: R(t) = R_m + vr_m·(t − t_{m,t}), where R_m, vr_m are the scatterer's instantaneous range/radial velocity at t_{m,t}.
-  x[k,m,n] = A · exp( j·[ 2π( fc·τ + slope·τ·t_f − ½·slope·τ² ) + 2π·pos_k·sin θ·cos φ + φ0 ] ), t_f = adcStartTime + n/fs, τ evaluated at t_{m,t}+t_f.
+  x[k,m,n] = A · exp( j·[ 2π( fc·τ + slope·τ·t_f − ½·slope·τ² ) − 2π·pos_k·sin θ·cos φ − 2π·z_k·sin φ + φ0 ] ), t_f = adcStartTime + n/fs, τ evaluated at t_{m,t}+t_f.
+  (REVISION 1, 2026-11-24: the spatial term is NEGATIVE — physically correct far-field sign under this mixing convention: an element at +x is closer to a target at θ>0, so its delay is shorter. DoA steering vectors must use the same sign so that the estimated θ>0 means target to the right. Do not rely on fftshift sign alone; map angle bins accordingly.)
+- CFAR with K>1 non-coherently summed channels: default α is the exact Gamma(K) value α = N·u/(1−u), u = betaincinv(K, N·K, 1−Pfa) (CA); single-channel formula only when K=1. Analytic CFAR tests use rectangular windows (Hann correlates adjacent noise cells).
+- Phase noise: one realization per frame shared by all channels and scatterers; each path gets φ(t) − φ(t−τ) (incl. Tx→Rx leakage). Swerling 1: one amplitude per frame shared by all channels; Swerling 3 analogously.
   (The −½·slope·τ² residual-video-phase term is included. φ0 = scatterer phase; golden vectors use φ0 = 0.)
 - Data cube layout: complex, shape (K virtual channels, M chirps, N samples), C-order. Range-Doppler cube: (K, N range bins, M Doppler bins), Doppler fftshifted so bin M/2 = 0 m/s.
 - FFT sign: forward = exp(−j2πkn/N). Hence positive beat frequency → positive range bin; receding target → Doppler bin > M/2; target at θ>0 → positive angle bin after fftshift.
