@@ -41,7 +41,7 @@ export interface Derived {
   virtPos: Float64Array; // K virtual positions (x, wavelengths)
   virtPosZ: Float64Array;
   arraySpacing: number; // minimum spacing of the virtual ULA [wavelengths]
-  angleIdx: Int32Array; // integer ULA index of each virtual element (for zero-padded FFT)
+  angleIdx: Int32Array; // ULA slot of each virtual channel (−1 = not used for azimuth)
   arrayLen: number; // max index + 1
   angleResDeg: number; // ≈ asin(1/(L·d)) at boresight (Rayleigh, uniform array)
   dataRate: number; // bytes/s for 16-bit I/Q samples
@@ -67,18 +67,25 @@ export function derive(cfg: RadarConfig): Derived {
       virtPos[k] = cfg.txPos[t] + cfg.rxPos[r];
       virtPosZ[k] = (cfg.txPosZ?.[t] ?? 0) + (cfg.rxPosZ?.[r] ?? 0);
     }
-  // minimum positive spacing between distinct x-positions
-  const sorted = Array.from(virtPos).sort((a, b) => a - b);
+  // Azimuth ULA (same rule as the Python reference): channels in the lowest z-plane,
+  // unique x positions (first channel in x-sorted stable order wins), spacing = min Δx.
+  let zmin = Infinity;
+  for (let k = 0; k < nVirt; k++) zmin = Math.min(zmin, virtPosZ[k]);
+  const cand: number[] = [];
+  for (let k = 0; k < nVirt; k++) if (Math.abs(virtPosZ[k] - zmin) < 1e-9) cand.push(k);
+  cand.sort((a, b) => virtPos[a] - virtPos[b] || a - b);
+  const sel: number[] = [];
+  for (const k of cand) if (!sel.some((j) => Math.abs(virtPos[j] - virtPos[k]) < 1e-9)) sel.push(k);
   let dmin = Infinity;
-  for (let i = 1; i < sorted.length; i++) {
-    const dd = sorted[i] - sorted[i - 1];
+  for (let i = 1; i < sel.length; i++) {
+    const dd = virtPos[sel[i]] - virtPos[sel[i - 1]];
     if (dd > 1e-9 && dd < dmin) dmin = dd;
   }
   if (!isFinite(dmin)) dmin = 0.5;
-  const pmin = sorted[0];
-  const angleIdx = new Int32Array(nVirt);
+  const pmin = sel.length ? virtPos[sel[0]] : 0;
+  const angleIdx = new Int32Array(nVirt).fill(-1);
   let arrayLen = 1;
-  for (let k = 0; k < nVirt; k++) {
+  for (const k of sel) {
     angleIdx[k] = Math.round((virtPos[k] - pmin) / dmin);
     arrayLen = Math.max(arrayLen, angleIdx[k] + 1);
   }

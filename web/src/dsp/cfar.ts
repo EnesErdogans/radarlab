@@ -75,6 +75,17 @@ export function caAlphaGamma(n: number, K: number, pfa: number): number {
   return bisect((a) => caPfaGamma(n, K, a), pfa);
 }
 
+/** round(x) with ties to even (numpy.round), used for the OS rank k = round(rank·N). */
+export function roundHalfEven(x: number): number {
+  const f = Math.floor(x),
+    d = x - f;
+  if (Math.abs(d - 0.5) < 1e-12) return f % 2 === 0 ? f : f + 1;
+  return Math.round(x);
+}
+export function osRankIndex(n: number, rank: number): number {
+  return Math.min(n, Math.max(1, roundHalfEven(rank * n)));
+}
+
 /** Quickselect: k-th smallest (0-based) of a[0..n), partially reorders a. */
 export function quickselect(a: Float64Array, n: number, k: number): number {
   let lo = 0,
@@ -215,20 +226,43 @@ export class Cfar2D {
           const n = (r1 - r0 + 1) * (2 * wd + 1) - (g1 - g0 + 1) * (2 * gd + 1);
           t = n > 0 ? (this.alphas.get('CA', n) * (outer - inner)) / n : Infinity;
         } else {
-          const lr1 = r - p.guardR - 1,
-            gr0 = r + p.guardR + 1;
-          const nLead = lr1 >= r0 ? (lr1 - r0 + 1) * (2 * wd + 1) : 0;
-          const nLag = r1 >= gr0 ? (r1 - gr0 + 1) * (2 * wd + 1) : 0;
-          const sLead = nLead > 0 ? this.rect(r0, lr1, dc - wd, dc + wd) : 0;
-          const sLag = nLag > 0 ? this.rect(gr0, r1, dc - wd, dc + wd) : 0;
-          if (nLead === 0 || nLag === 0) {
-            const n = nLead + nLag;
-            t = n > 0 ? (this.alphas.get('CA', n) * (sLead + sLag)) / n : Infinity;
-          } else {
-            const n = Math.min(nLead, nLag);
+          // halves: lead = Δr<0 or (Δr=0, Δd<0); lag = Δr>0 or (Δr=0, Δd>0) (training cells only)
+          let sLead = 0,
+            sLag = 0,
+            nLead = 0,
+            nLag = 0;
+          const w = 2 * wd + 1;
+          if (r0 <= r - 1) {
+            const gt0 = Math.max(r0, r - p.guardR);
+            sLead = this.rect(r0, r - 1, dc - wd, dc + wd);
+            nLead = (r - r0) * w;
+            if (gt0 <= r - 1) {
+              sLead -= this.rect(gt0, r - 1, dc - gd, dc + gd);
+              nLead -= (r - gt0) * (2 * gd + 1);
+            }
+          }
+          if (r + 1 <= r1) {
+            const gt1 = Math.min(r1, r + p.guardR);
+            sLag = this.rect(r + 1, r1, dc - wd, dc + wd);
+            nLag = (r1 - r) * w;
+            if (r + 1 <= gt1) {
+              sLag -= this.rect(r + 1, gt1, dc - gd, dc + gd);
+              nLag -= (gt1 - r) * (2 * gd + 1);
+            }
+          }
+          if (wd > gd) {
+            sLead += this.rect(r, r, dc - wd, dc - gd - 1);
+            sLag += this.rect(r, r, dc + gd + 1, dc + wd);
+            nLead += wd - gd;
+            nLag += wd - gd;
+          }
+          const nTr = nLead + nLag;
+          const nMin = Math.min(nLead, nLag);
+          if (nMin < nTr / 4) t = nTr > 0 ? (this.alphas.get('CA', nTr) * (sLead + sLag)) / nTr : Infinity;
+          else {
             const mLead = sLead / nLead,
               mLag = sLag / nLag;
-            t = this.alphas.get(type, n) * (type === 'GO' ? Math.max(mLead, mLag) : Math.min(mLead, mLag));
+            t = this.alphas.get(type, nMin) * (type === 'GO' ? Math.max(mLead, mLag) : Math.min(mLead, mLag));
           }
         }
         const i = r * M + d;
@@ -261,7 +295,7 @@ export class Cfar2D {
       this.tmp.set(P);
       const q = quickselect(this.tmp, P.length, Math.floor(0.1 * P.length));
       const nFull = maxN - (2 * p.guardR + 1) * (2 * gd + 1);
-      const kFull = Math.min(nFull, Math.max(1, Math.round(p.osRank * nFull)));
+      const kFull = osRankIndex(nFull, p.osRank);
       skip = this.alphas.get('OS', nFull, kFull) * q;
     }
     let count = 0;
@@ -286,7 +320,7 @@ export class Cfar2D {
             buf[n++] = P[row + c];
           }
         }
-        const k = Math.min(n, Math.max(1, Math.round(p.osRank * n)));
+        const k = osRankIndex(n, p.osRank);
         const xk = quickselect(buf, n, k - 1);
         const t = this.alphas.get('OS', n, k) * xk;
         thr[i] = t;
@@ -327,14 +361,14 @@ export class Cfar2D {
           if (c < 0) c += M;
           else if (c >= M) c -= M;
           const v = P[rr * M + c];
-          if (rr < r - p.guardR) {
+          if (inG && Math.abs(dd) <= gd) continue;
+          if (rr < r || (rr === r && dd < 0)) {
             sLead += v;
             nLead++;
-          } else if (rr > r + p.guardR) {
+          } else {
             sLag += v;
             nLag++;
           }
-          if (inG && Math.abs(dd) <= gd) continue;
           sum += v;
           buf[n++] = v;
         }
@@ -344,11 +378,10 @@ export class Cfar2D {
         let t: number;
         if (type === 'CA') t = (this.alphas.get('CA', n) * sum) / n;
         else if (type === 'OS') {
-          const k = Math.min(n, Math.max(1, Math.round(p.osRank * n)));
+          const k = osRankIndex(n, p.osRank);
           t = this.alphas.get('OS', n, k) * quickselect(buf, n, k - 1);
-        } else if (nLead === 0 || nLag === 0) {
-          const nn = nLead + nLag;
-          t = (this.alphas.get('CA', nn) * (sLead + sLag)) / nn;
+        } else if (Math.min(nLead, nLag) < n / 4) {
+          t = (this.alphas.get('CA', n) * sum) / n;
         } else {
           const nn = Math.min(nLead, nLag);
           const a = sLead / nLead,

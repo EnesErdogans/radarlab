@@ -144,6 +144,33 @@ export class Detector {
     return nd;
   }
 
+  /** Interpolated range/velocity/angle of a single RD cell (used by golden tests and hover readouts). */
+  measureCell(P: Float64Array, rdRe: Float64Array, rdIm: Float64Array, r: number, d: number): Detection {
+    const M = this.M,
+      nR = this.nR;
+    const det = newDetection();
+    det.rBin = r;
+    det.dBin = d;
+    det.power = P[r * M + d];
+    const lp = Math.log(det.power + 1e-300);
+    const ro = r > 0 && r < nR - 1 ? parabolic(Math.log(P[(r - 1) * M + d] + 1e-300), lp, Math.log(P[(r + 1) * M + d] + 1e-300)) : 0;
+    const dm = d === 0 ? M - 1 : d - 1,
+      dp = d === M - 1 ? 0 : d + 1;
+    const doff = parabolic(Math.log(P[r * M + dm] + 1e-300), lp, Math.log(P[r * M + dp] + 1e-300));
+    det.rFrac = r + ro;
+    det.dFrac = d + doff;
+    det.range = det.rFrac * this.d.rangeRes;
+    det.velocity = (det.dFrac - M / 2) * this.d.dv;
+    const save = this.dets[0],
+      cnt = this.count;
+    this.dets[0] = det;
+    this.count = 1;
+    this.estimateAngles(rdRe, rdIm);
+    this.dets[0] = save;
+    this.count = cnt;
+    return det;
+  }
+
   /** Zero-padded FFT DoA with TDM phase compensation (uses interpolated velocity). */
   estimateAngles(rdRe: Float64Array, rdIm: Float64Array): void {
     const d = this.d,
@@ -164,10 +191,12 @@ export class Detector {
         const ph = -2 * Math.PI * ((2 * det.velocity) / d.lambda) * t * cfg.chirpPeriod;
         const c = Math.cos(ph),
           s = Math.sin(ph);
+        const slot = d.angleIdx[k];
+        if (slot < 0) continue;
         const xr = rdRe[idx],
           xi = rdIm[idx];
-        re[d.angleIdx[k]] += xr * c - xi * s;
-        im[d.angleIdx[k]] += xr * s + xi * c;
+        re[slot] = xr * c - xi * s;
+        im[slot] = xr * s + xi * c;
       }
       fft.forward(re, im);
       let bi = 0,
@@ -228,9 +257,11 @@ export class Detector {
         }
         if (canLag) {
           for (let k = 0; k < K; k++) {
+            if (idx[k] < 0) continue;
             const ar = xr[k],
               ai = xi[k];
             for (let l = 0; l <= k; l++) {
+              if (idx[l] < 0) continue;
               // x_k · conj(x_l) at lag idx_k − idx_l
               const lag = idx[k] - idx[l];
               const p = lag >= 0 ? lag : lag + A;
