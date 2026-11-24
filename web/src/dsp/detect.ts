@@ -15,14 +15,17 @@ export interface Detection {
   power: number; // linear peak power
   snrDb: number; // peak power / CFAR noise statistic (threshold / α of the active CFAR type) in dB
   angleBin: number; // interpolated, fftshifted (A/2 = boresight)
-  angleDeg: number;
+  angleDeg: number; // asin(u_x): what the 1-D azimuth FFT measures (= θ when φ = 0)
+  elevDeg: number; // φ from same-x / different-z virtual pairs (0 if the array has none)
+  azimuthDeg: number; // θ = atan2(x, y) (brief convention), corrected for elevation
   x: number;
   y: number;
+  z: number;
   cells: number;
 }
 
 export function newDetection(): Detection {
-  return { rBin: 0, dBin: 0, rFrac: 0, dFrac: 0, range: 0, velocity: 0, power: 0, snrDb: 0, angleBin: 0, angleDeg: 0, x: 0, y: 0, cells: 0 };
+  return { rBin: 0, dBin: 0, rFrac: 0, dFrac: 0, range: 0, velocity: 0, power: 0, snrDb: 0, angleBin: 0, angleDeg: 0, elevDeg: 0, azimuthDeg: 0, x: 0, y: 0, z: 0, cells: 0 };
 }
 
 /** Parabolic interpolation offset in (−0.5, 0.5) from three samples (use log power). */
@@ -40,6 +43,8 @@ export class Detector {
   readonly M: number;
   readonly A: number;
   private visited: Uint8Array;
+  /** cluster index of every mask cell after cluster() (−1 = none), for tests / tooling */
+  readonly labels: Int32Array;
   private stack: Int32Array;
   readonly dets: Detection[];
   count = 0;
@@ -51,6 +56,8 @@ export class Detector {
   private lagIm: Float64Array;
   private xr: Float64Array;
   private xi: Float64Array;
+  private elPairs: Int32Array; // (low, high) virtual-channel index pairs with equal x, z_high > z_low
+  private elDz = 0;
   private raAcc = new Float64Array(0);
 
   constructor(cfg: RadarConfig, d: Derived, nAngle = 64, maxDet = 256) {
@@ -60,6 +67,7 @@ export class Detector {
     this.M = cfg.nChirps;
     this.A = nAngle;
     this.visited = new Uint8Array(this.nR * this.M);
+    this.labels = new Int32Array(this.nR * this.M);
     this.stack = new Int32Array(this.nR * this.M);
     this.dets = Array.from({ length: maxDet }, newDetection);
     this.aRe = new Float64Array(nAngle);
@@ -68,6 +76,15 @@ export class Detector {
     this.lagIm = new Float64Array(nAngle);
     this.xr = new Float64Array(d.nVirt);
     this.xi = new Float64Array(d.nVirt);
+    // elevation pairs (same rule as Python estimate_elevation)
+    const pairs: number[] = [];
+    for (let i = 0; i < d.nVirt; i++)
+      for (let j = 0; j < d.nVirt; j++)
+        if (Math.abs(d.virtPos[i] - d.virtPos[j]) < 1e-9 && d.virtPosZ[j] - d.virtPosZ[i] > 1e-9) {
+          pairs.push(i, j);
+          this.elDz = d.virtPosZ[j] - d.virtPosZ[i];
+        }
+    this.elPairs = new Int32Array(pairs);
     // TDM compensation phasors for each TX and Doppler bin (bin-centre velocity)
     this.compRe = new Float64Array(d.nTx * this.M);
     this.compIm = new Float64Array(d.nTx * this.M);
@@ -86,6 +103,8 @@ export class Detector {
       M = this.M;
     const vis = this.visited;
     vis.fill(0);
+    const lab = this.labels;
+    lab.fill(-1);
     const st = this.stack;
     let nd = 0;
     for (let i0 = 0; i0 < mask.length && nd < this.dets.length; i0++) {
@@ -98,6 +117,7 @@ export class Detector {
         cells = 0;
       while (sp > 0) {
         const i = st[--sp];
+        lab[i] = nd;
         cells++;
         if (P[i] > bestP) {
           bestP = P[i];
@@ -186,20 +206,25 @@ export class Detector {
       const det = this.dets[i];
       re.fill(0);
       im.fill(0);
+      const cr = this.xr,
+        ci = this.xi;
       for (let k = 0; k < d.nVirt; k++) {
         const t = (k / d.nRx) | 0;
         const idx = ((k * nR + det.rBin) * M) + det.dBin;
         const ph = -2 * Math.PI * ((2 * det.velocity) / d.lambda) * t * cfg.chirpPeriod;
         const c = Math.cos(ph),
           s = Math.sin(ph);
-        const slot = d.angleIdx[k];
-        if (slot < 0) continue;
         const xr = rdRe[idx],
           xi = rdIm[idx];
+        // TDM-compensated snapshot
+        cr[k] = xr * c - xi * s;
+        ci[k] = xr * s + xi * c;
+        const slot = d.angleIdx[k];
+        if (slot < 0) continue;
         // conjugated snapshot + forward FFT ≡ +j kernel Σ g_k e^{+j2πka/A}, matched to the
         // −j steering vector of brief rev. 1 (same as the Python reference): θ > 0 → bin > A/2
-        re[slot] = xr * c - xi * s;
-        im[slot] = -(xr * s + xi * c);
+        re[slot] = cr[k];
+        im[slot] = -ci[k];
       }
       fft.forward(re, im);
       let bi = 0,
@@ -215,13 +240,34 @@ export class Detector {
       const pc = re[(bi + 1) % A] ** 2 + im[(bi + 1) % A] ** 2;
       const off = parabolic(Math.log(pa + 1e-300), Math.log(bp + 1e-300), Math.log(pc + 1e-300));
       // fftshift: unshifted bin b ↔ shifted (b + A/2) mod A
-      let sb = ((bi + A / 2) % A) + off;
+      const sb = ((bi + A / 2) % A) + off;
       det.angleBin = sb;
-      const sinT = Math.max(-1, Math.min(1, (sb - A / 2) / (A * d.arraySpacing)));
-      const th = Math.asin(sinT);
-      det.angleDeg = (th * 180) / Math.PI;
-      det.x = det.range * Math.sin(th);
-      det.y = det.range * Math.cos(th);
+      let ux = (sb - A / 2) / (A * d.arraySpacing);
+      // wrapped past the edge of visible space (d > ½ λ), as Python estimate_azimuth
+      if (ux > 1) ux -= 1 / d.arraySpacing;
+      else if (ux < -1) ux += 1 / d.arraySpacing;
+      ux = Math.max(-1, Math.min(1, ux));
+      det.angleDeg = (Math.asin(ux) * 180) / Math.PI;
+      // elevation φ = asin(−arg(Σ conj(x_low)·x_high) / (2π·Δz))
+      let uz = 0;
+      if (this.elPairs.length) {
+        let ar = 0,
+          ai = 0;
+        for (let q = 0; q < this.elPairs.length; q += 2) {
+          const lo = this.elPairs[q],
+            hi = this.elPairs[q + 1];
+          ar += cr[lo] * cr[hi] + ci[lo] * ci[hi];
+          ai += cr[lo] * ci[hi] - ci[lo] * cr[hi];
+        }
+        const v = -Math.atan2(ai, ar) / (2 * Math.PI * this.elDz);
+        uz = Math.max(-1, Math.min(1, v));
+      }
+      det.elevDeg = (Math.asin(uz) * 180) / Math.PI;
+      const uy = Math.sqrt(Math.max(1 - ux * ux - uz * uz, 0));
+      det.x = det.range * ux;
+      det.y = det.range * uy;
+      det.z = det.range * uz;
+      det.azimuthDeg = (Math.atan2(ux, uy) * 180) / Math.PI;
     }
   }
 

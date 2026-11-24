@@ -9,7 +9,11 @@ import { defaultSettings, derive, type Derived, type RadarConfig, type SimSettin
 import { Engine } from '../src/engine/engine';
 import { Synthesizer, type PointScatterer } from '../src/sim/synth';
 import { makeWindow } from '../src/dsp/window';
-import { caAlpha, caAlphaGamma, goAlpha, gsAlphaGamma, osAlpha, osAlphaGamma, osRankIndex, soAlpha } from '../src/dsp/cfar';
+import { Cfar2D, caAlpha, caAlphaGamma, goAlpha, gsAlphaGamma, osAlpha, osAlphaGamma, osRankIndex, soAlpha } from '../src/dsp/cfar';
+import { Detector } from '../src/dsp/detect';
+import { amplitudeFor } from '../src/sim/synth';
+import { ReferenceTracker } from '../src/track/reference';
+import type { CfarType } from '../src/config/radar';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const dir = join(here, '..', '..', 'golden');
@@ -137,6 +141,113 @@ describe('golden vectors (python reference)', () => {
             if (row.caGammaK4 !== undefined) cmp(caAlphaGamma(row.n, 4, row.pfa), row.caGammaK4, ctx + ' CA-Gamma4');
           }
           console.info(`cfar_alpha: ${g.table.length} rows, worst rel diff ts vs py ${worst.toExponential(2)}`);
+        });
+        return;
+      }
+      // ---------- CFAR on stored power maps (goldenSet 2) ----------
+      if (Array.isArray(g.maps) && g.shape) {
+        const [nR, M] = g.shape;
+        for (const mp of g.maps) {
+          it(`K=${mp.K}: CA/GO/SO/OS thresholds, α, masks (incl. range edges, GO/SO fallback, Doppler wrap)`, () => {
+            const P = Float64Array.from(mp.P);
+            const relT = T.thresholdRel ?? 1e-9,
+              relA = T.alphaRel ?? 1e-9;
+            for (const type of ['CA', 'GO', 'SO', 'OS'] as CfarType[]) {
+              const ref = mp[type.toLowerCase()];
+              if (!ref) continue;
+              const c = new Cfar2D(nR, M, { type, pfa: g.pfa, guardR: g.guard[0], guardD: g.guard[1], trainR: g.train[0], trainD: g.train[1], osRank: g.osRank ?? 0.75 }, mp.K);
+              const out = c.run(P, type, true);
+              let worstT = 0,
+                worstA = 0;
+              for (let i = 0; i < nR * M; i++) {
+                const ctx = `K=${mp.K} ${type} cell (${Math.floor(i / M)}, ${i % M})`;
+                relClose(out.thr[i], ref.threshold[i], relT, ctx + ' threshold');
+                relClose(out.thr[i] / out.noise[i], ref.alpha[i], relA, ctx + ' alpha');
+                worstT = Math.max(worstT, Math.abs(out.thr[i] / ref.threshold[i] - 1));
+                worstA = Math.max(worstA, Math.abs(out.thr[i] / out.noise[i] / ref.alpha[i] - 1));
+              }
+              const det: [number, number][] = [];
+              for (let i = 0; i < nR * M; i++) if (out.mask[i]) det.push([Math.floor(i / M), i % M]);
+              const key = (a: number[][]) => a.map((x) => x.join(',')).sort();
+              expect(key(det), `K=${mp.K} ${type} detections`).toEqual(key(ref.detections));
+              if (ref.caFallbackCells) {
+                // fallback cells use the CA statistic with the Gamma(K) CA α for nTrain cells
+                const ca = new Cfar2D(nR, M, { type: 'CA', pfa: g.pfa, guardR: g.guard[0], guardD: g.guard[1], trainR: g.train[0], trainD: g.train[1], osRank: 0.75 }, mp.K).run(P, 'CA', true);
+                for (const [r, d] of ref.caFallbackCells) relClose(out.thr[r * M + d], ca.thr[r * M + d], 1e-12, `${type} fallback (${r}, ${d})`);
+              }
+              console.info(`cfar_maps K=${mp.K} ${type}: worst rel diff threshold ${worstT.toExponential(1)}, α ${worstA.toExponential(1)}`);
+            }
+          });
+        }
+        return;
+      }
+      // ---------- clustering (goldenSet 2) ----------
+      if (Array.isArray(g.clusters) && Array.isArray(g.mask)) {
+        it('8-connected clustering with Doppler wrap: peaks, power, size, members', () => {
+          const [nR, M] = g.shape;
+          const cfg: RadarConfig = { fc: 77e9, slope: 30e12, fs: 5e6, nSamples: nR, adcStartTime: 0, chirpPeriod: 1e-5, nChirps: M, txPos: [0], rxPos: [0], framePeriod: 0.01, iqMode: 'complex' };
+          const dd = derive(cfg);
+          expect(dd.nRangeBins).toBe(nR);
+          const det = new Detector(cfg, dd, 64, 64);
+          const P = Float64Array.from(g.P);
+          const mask = new Uint8Array(nR * M);
+          for (const [r, d] of g.mask) mask[r * M + d] = 1;
+          const n = det.cluster(P, mask, new Float64Array(nR * M).fill(1));
+          expect(n).toBe(g.clusters.length);
+          const ours = det.dets.slice(0, n).map((x, ci) => {
+            const cells: number[][] = [];
+            for (let i = 0; i < nR * M; i++) if (det.labels[i] === ci) cells.push([Math.floor(i / M), i % M]);
+            return { rangeBin: x.rBin, dopplerBin: x.dBin, power: x.power, size: x.cells, cells };
+          });
+          // Python sorts by peak power, the web engine lists clusters in scan order → compare as sets
+          ours.sort((a, b) => b.power - a.power);
+          const rel = T.powerRel ?? 1e-12;
+          for (let i = 0; i < n; i++) {
+            const a = ours[i],
+              b = g.clusters[i];
+            expect([a.rangeBin, a.dopplerBin], `cluster ${i} peak`).toEqual([b.rangeBin, b.dopplerBin]);
+            relClose(a.power, b.power, rel, `cluster ${i} power`);
+            expect(a.size, `cluster ${i} size`).toBe(b.size);
+            expect(a.cells, `cluster ${i} cells`).toEqual(b.cells);
+          }
+        });
+        return;
+      }
+      // ---------- Python reference tracker (goldenSet 2) ----------
+      if (Array.isArray(g.frames) && Array.isArray(g.measurements)) {
+        it('EKF-CV + GNN + M/N tracker (TS port of the Python reference): state, covariance, status, hits', () => {
+          const pp = g.params;
+          const trk = new ReferenceTracker({
+            q: pp.q,
+            sigmaR: pp.sigmaR,
+            sigmaTheta: pp.sigmaTheta,
+            sigmaVr: pp.sigmaVr,
+            gateProb: pp.gateProb,
+            confirmM: pp.confirmM,
+            confirmN: pp.confirmN,
+            maxMisses: pp.maxMisses,
+            initVtStd: pp.initVtStd,
+          });
+          if (pp.gateChi2 !== undefined) relClose(trk.gate, pp.gateChi2, 1e-10, 'χ²₃ gate');
+          const sAbs = T.stateAbs ?? 1e-9,
+            cRel = T.covRel ?? 1e-9;
+          g.frames.forEach((fr: Json, f: number) => {
+            trk.step(g.measurements[f], f === 0 ? 0 : g.dt);
+            const ctx = `frame ${fr.frame ?? f}`;
+            expect(trk.tracks.map((t) => t.id), `${ctx} track ids`).toEqual(fr.tracks.map((t: Json) => t.id));
+            fr.tracks.forEach((rt: Json, i: number) => {
+              const t = trk.tracks[i];
+              const c = `${ctx} track ${rt.id}`;
+              expect(t.status, `${c} status`).toBe(rt.status);
+              expect(t.hits, `${c} hits`).toEqual(rt.hits);
+              expect(t.misses, `${c} misses`).toBe(rt.misses);
+              expect(t.age, `${c} age`).toBe(rt.age);
+              for (let k = 0; k < 4; k++) expect(Math.abs(t.x[k] - rt.x[k]), `${c} x[${k}]: ts=${t.x[k]} py=${rt.x[k]}`).toBeLessThanOrEqual(sAbs);
+              let mx = 0;
+              for (const v of rt.P) mx = Math.max(mx, Math.abs(v));
+              for (let k = 0; k < 16; k++) expect(Math.abs(t.P[k] - rt.P[k]), `${c} P[${k}]: ts=${t.P[k]} py=${rt.P[k]}`).toBeLessThanOrEqual(cRel * mx);
+            });
+          });
         });
         return;
       }
@@ -277,6 +388,46 @@ describe('golden vectors (python reference)', () => {
         });
       }
 
+      if (Array.isArray(g.amplitudes)) {
+        it('physical amplitude mode: per-scatterer amplitudes (radar equation, kT0F·fs noise)', () => {
+          g.amplitudes.forEach((a: number, i: number) => {
+            const p = pts[i];
+            relClose(amplitudeFor(p.rcs, Math.hypot(p.x, p.y, p.z), s, cfg, d.lambda), a, 1e-12, `scatterer ${i}`);
+          });
+        });
+      }
+
+      if (g.rangeAngle) {
+        const ra = g.rangeAngle;
+        for (const win of ['rect', 'hann'] as const) {
+          if (!ra[win]) continue;
+          it(`range–angle map (${win} angle window, Σw-normalised)`, () => {
+            const e = engine();
+            const A = ra.angleFftSize ?? 64;
+            expect(ra.excludeZeroDoppler ?? false).toBe(false);
+            const [nR, nA] = ra[win].shape;
+            expect([nR, nA]).toEqual([d.nRangeBins, A]);
+            const det = new Detector(cfg, d, A);
+            const out = new Float64Array(nR * A);
+            det.rangeAngle(e.rdRe, e.rdIm, out, makeWindow(win, d.arrayLen));
+            const ref: number[] = ra[win].data.flat(Infinity);
+            let mx = 0;
+            for (const v of ref) mx = Math.max(mx, v);
+            const tol = (ra.tolerances?.relOfMax ?? 1e-9) * mx;
+            let worst = 0,
+              at = 0;
+            for (let i = 0; i < ref.length; i++) {
+              const err = Math.abs(out[i] - ref[i]);
+              if (err > worst) {
+                worst = err;
+                at = i;
+              }
+            }
+            expect(worst, `worst cell (${Math.floor(at / A)}, ${at % A}) ts=${out[at]} py=${ref[at]}`).toBeLessThanOrEqual(tol);
+          });
+        }
+      }
+
       const peaks: Json[] = g.expected?.peaks ?? [];
       if (peaks.length) {
         it('expected peaks: bins, interpolation, range/velocity/angle, TDM compensation, truth', () => {
@@ -321,11 +472,34 @@ describe('golden vectors (python reference)', () => {
               chk('angleBinNoTdmComp', Math.round(m.angleBin), pk.angleBinNoTdmComp, T.integerBins ?? 0);
               Object.assign(m, saved, { velocity: v });
             }
+            if (d.nVirt > 1) {
+              // point cloud (Python point_cloud): elevation from same-x/different-z pairs,
+              // x = R·u_x, z = R·u_z, y = R·√(1−u_x²−u_z²), θ = atan2(x, y)
+              chk('elevationDeg', m.elevDeg, pk.elevationDeg, T.angleDegAbs ?? 1e-4);
+              chk('azimuthDeg', m.azimuthDeg, pk.azimuthDeg, T.angleDegAbs ?? 1e-4);
+              if (pk.xyz) {
+                const tx = T.xyzAbs ?? 1e-6;
+                chk('x', m.x, pk.xyz[0], tx);
+                chk('y', m.y, pk.xyz[1], tx);
+                chk('z', m.z, pk.xyz[2], tx);
+              }
+            }
             if (pk.truth) {
-              chk('truth range', m.range, pk.truth.range, T.truthRangeAbs ?? d.rangeRes);
-              chk('truth velocity (aliased)', m.velocity, pk.truth.velocityAliased ?? pk.truth.velocity, T.truthVelocityAbs ?? d.dv);
-              if (d.nVirt > 1 && Math.abs(pk.truth.velocity - (pk.truth.velocityAliased ?? pk.truth.velocity)) < 1e-9)
-                chk('truth angle', m.angleDeg, pk.truth.angleDeg, T.truthAngleDegAbs ?? 2);
+              const tr = pk.truth;
+              const notAliased = Math.abs(tr.velocity - (tr.velocityAliased ?? tr.velocity)) < 1e-9;
+              // observable truth: interpolation bias only
+              chk('truth rangeBeat', m.range, tr.rangeBeat, T.truthRangeBeatAbs ?? d.rangeRes);
+              chk('truth velocityEffective', m.velocity, tr.velocityEffective, T.truthVelocityEffectiveAbs ?? d.dv);
+              // (with an aliased velocity the TDM compensation is wrong, so the angle is not comparable)
+              if (d.nVirt > 1 && notAliased) chk('truth angleDegFft', m.angleDeg, tr.angleDegFft, T.truthAngleFftDegAbs ?? 2);
+              // geometric truth: + the known deterministic offsets of this file
+              chk('truth range', m.range, tr.range, T.truthRangeAbs ?? d.rangeRes);
+              chk('truth velocity (aliased)', m.velocity, tr.velocityAliased ?? tr.velocity, T.truthVelocityAbs ?? d.dv);
+              if (d.nVirt > 1 && notAliased) {
+                chk('truth angle', m.azimuthDeg, tr.angleDeg, T.truthAngleDegAbs ?? 2);
+                chk('truth azimuth', m.azimuthDeg, tr.angleDeg, T.truthAzimuthDegAbs ?? 2);
+                chk('truth elevation', m.elevDeg, tr.elevationDeg, T.truthElevationDegAbs ?? 2);
+              }
             }
           }
         });
