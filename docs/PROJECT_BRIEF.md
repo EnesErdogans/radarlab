@@ -14,7 +14,7 @@ A **research-grade, open-source FMCW MIMO radar simulation framework** that:
 radarlab/
   docs/PROJECT_BRIEF.md      this file (conventions are binding)
   docs/literature/           literature review, references.bib, fidelity requirements
-  docs/paper/                paper drafts, figures
+  docs/paper/                paper drafts, figures (planned; not created yet)
   python/                    REFERENCE implementation (numpy/scipy), pip-installable `radarlab`
     src/radarlab/            config, scene/targets, signal, impairments, dsp, track, io (TI cfg + DCA1000), metrics
     tests/                   pytest

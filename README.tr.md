@@ -15,19 +15,20 @@ Enes Erdoğan, Elektrik-Elektronik Mühendisliği Bölümü, Abdullah Gül Üniv
 
 ## Özet
 
-RadarLab, zaman bölmeli MIMO (TDM-MIMO) dizili FMCW radarların benzetimi ve sinyal işlemesi için açık kaynaklı bir çerçevedir. İki uygulaması vardır. Python uygulaması referanstır: artık video fazı (RVP), chirp içi hareket ve TDM zamanlaması dahil kesin vuru (beat) sinyalini üretir; menzil korelasyonlu faz gürültüsü, Tx–Rx sızıntısı, IQ dengesizliği, nicemleme, yer yansımalı çok yollu yayılım ve FMCW girişimi gibi donanım bozulmalarını modeller. TypeScript uygulaması aynı zinciri tarayıcıda bir Web Worker içinde etkileşimli hızda çalıştırır. İki uygulamanın sayısal olarak aynı sonucu verdiği, diller arası altın test vektörleriyle (golden vectors) sürekli entegrasyonda denetlenir. İşleme zinciri: pencereli menzil ve Doppler FFT, MTI, K sanal kanal üzerinde evre uyumsuz toplama için kesin Gamma(K) eşikli CA/GO/SO/OS-CFAR, FFT/MVDR/MUSIC ile geliş açısı kestirimi, kümeleme, EKF izleyici ve mikro-Doppler analizi. On bir doğrulama deneyi (V1–V11) simülatörü kapalı form teoriyle karşılaştırır; hepsi geçer.
+RadarLab, zaman bölmeli MIMO (TDM-MIMO) dizili FMCW radarların benzetimi ve sinyal işlemesi için açık kaynaklı bir çerçevedir. İki uygulaması vardır. Python uygulaması referanstır: artık video fazı (RVP), chirp içi hareket ve TDM zamanlaması dahil kesin vuru (beat) sinyalini üretir; menzil korelasyonlu faz gürültüsü, Tx–Rx sızıntısı, IQ dengesizliği, nicemleme, yer yansımalı çok yollu yayılım ve FMCW girişimi gibi donanım bozulmalarını modeller. TypeScript uygulaması aynı zinciri tarayıcıda bir Web Worker içinde etkileşimli hızda çalıştırır. İki uygulamanın sayısal olarak aynı sonucu verdiği, diller arası altın test vektörleriyle (golden vectors) sürekli entegrasyonda denetlenir. Kapsam: sentez (karmaşık ve gerçel IF, iki genlik modu), MTI, FFT işleme, dört CFAR türü, kümeleme, tepe/açı/yükseklik kestirimi ve menzil–açı haritası (ayrıntı: [`golden/README.md`](golden/README.md)). İşleme zinciri: pencereli menzil ve Doppler FFT, MTI, K sanal kanal üzerinde evre uyumsuz toplama için kesin Gamma(K) eşikli CA/GO/SO/OS-CFAR, FFT/MVDR/MUSIC ile geliş açısı kestirimi, kümeleme, EKF izleyici ve mikro-Doppler analizi. Doğrulama iki gruba ayrılır. Sekiz deney simülatörü koddan bağımsız kapalı form teoriyle karşılaştırır (V1, V1c, V2–V5, V7, V8). Beş deney ise uygulama tutarlılık denetimidir (V6, V8f, V9, V10, V11): bunlarda referans aynı model ya da kodla üretilir, bu yüzden gerilemeleri yakalarlar ama ortak bir modelleme hatasını bulamazlar. 8 teori doğrulamasının ve 5 tutarlılık denetiminin hepsi geçer.
 
 ## Öne çıkan sonuçlar
 
-Tüm sayılar `python/examples/out/validation_report.md` dosyasından alınmıştır.
+Sayılar `python/examples/out/validation_report.md` dosyasından alınmıştır (test sayıları test paketlerinden).
 
-- **Yanlış alarm (V1):** Dikdörtgen pencereyle, sabit/CA/OS/GO/SO detektörleri için K = 1 ve K = 8'de benzetim Pfa değeri tasarım değerine çok yakındır (en büyük |log10 oran| 0.034).
+- **Yanlış alarm (V1):** Dikdörtgen pencereyle, sabit/CA/OS/GO/SO detektörleri için K = 1, 4 ve 8'de benzetim Pfa değeri tasarım değerine çok yakındır (en büyük |log10 oran| 0.028).
 - **Hann penceresi (V1c):** Komşu gürültü hücreleri arasında −2/3 korelasyon oluşur (ölçülen −0.6725); CA-CFAR yanlış alarm oranı tasarım değerinin yaklaşık 1.6 katına çıkar.
-- **Tespit olasılığı (V2):** Swerling 0/1/3, K = 1 ve 8 için 30 noktanın 29'u teorinin %95 güven aralığı içindedir.
-- **CRLB (V3):** Eşik bölgesinin üstünde menzil, hız ve açı kestiricilerinin verimliliği 0.956–1.041 arasındadır.
-- **Gamma(K) CFAR:** Tek kanal CA formülü K kanalın toplamına uygulanırsa eşik, K = 4–8 ve N = 16–32 eğitim hücresi için 4.1–6.1 dB fazla yüksek olur (`golden/cfar_alpha.json`, tasarım Pfa = 10⁻⁴).
-- **DCA1000 kapalı döngü (V11):** `.cfg` → benzetim → int16 `.bin` → okuma → işleme zincirinde kodlar birebir aynı kalır ve tespitler değişmez.
-- **Testler:** Python 114 hızlı + 7 yavaş (Monte-Carlo) test; web 79 test (Vitest). Hepsi geçiyor.
+- **Tespit olasılığı (V2):** Swerling 0/1/3, K = 1 ve 8 için 30 noktanın 29'u teorinin %95, 30'u %99.9 güven aralığı içindedir (geçme ölçütü %99.9).
+- **CRLB (V3):** Eşik bölgesinin üstünde pencere kullanmayan ML kestiricinin menzil, hız ve açı verimliliği 0.956–1.041 arasındadır. Bu sonuç benzetim verisini doğrular; Hann pencereli işleme zincirinin verimli olduğunu göstermez.
+- **İki yollu yansıma (V5):** λ, ADC penceresinin ortasındaki frekansta alındığında sıfır noktaları kapalı formla %0.07 içinde örtüşür.
+- **Gamma(K) CFAR:** Evre uyumsuz toplamada kesin eşikler yeni bir teori değildir; klasik CFAR literatüründe bilinir (Shor ve Levanon 1991; Ritcey 1990). RadarLab bu eşiklerin dört CFAR türü için doğrulanmış bir uygulamasını sunar ve sık yapılan bir hatanın bedelini ölçer: tek kanal CA formülü K kanalın toplamına uygulanırsa eşik, K = 4–8 ve N = 16–32 eğitim hücresi için 4.1–6.1 dB fazla yüksek olur (`golden/cfar_alpha.json`, tasarım Pfa = 10⁻⁴).
+- **DCA1000 kapalı döngü (V11, tutarlılık denetimi):** `.cfg` → benzetim → int16 `.bin` → okuma → işleme zincirinde kodlar birebir aynı kalır ve tespitler değişmez. Yazıcı ve okuyucu aynı bayt düzeni varsayımını kullanır; gerçek ölçümle denetim henüz yapılmadı.
+- **Testler:** Python 137 hızlı + 8 yavaş (Monte-Carlo) test; web 119 test (Vitest). Hepsi geçiyor.
 
 ## Hızlı başlangıç
 
@@ -58,7 +59,7 @@ Sekiz panel (kuşbakışı görünüm ve izler, chirp/IF sinyali, menzil profili
 
 ## Sınırlamalar
 
-Sahne modeli nokta ve genişletilmiş saçıcılardan oluşur (ışın izleme yok). Web motorunda kesin Gamma(K) eşiği yalnızca CA-CFAR için vardır; GO/SO/OS K = 1 formüllerini kullanır (K > 1 için tutucu). Faz gürültüsü, sızıntı, IQ dengesizliği gibi bozulmalar şimdilik yalnızca Python'dadır. Gerçek ölçümlerle karşılaştırma henüz yapılmadı. Ayrıntılar için [README.md](README.md) Bölüm 10'a bakın.
+Sahne modeli nokta ve genişletilmiş saçıcılardan oluşur (ışın izleme yok). Düzlemsel olmayan dizilerde yükseklik kestirilemez; bu durumda z ≠ 0 olan hedefler asin(sinθ·cosφ) açısında görünür (φ = 10° için 0.29°). Python izleyicisinde genişletilmiş hedef birleştirme yoktur; bir araç birden çok iz oluşturabilir. Faz gürültüsü, sızıntı, IQ dengesizliği gibi bozulmalar şimdilik yalnızca Python'dadır. Gerçek ölçümlerle karşılaştırma henüz yapılmadı. Ayrıntılar için [README.md](README.md) Bölüm 10'a bakın.
 
 ## Atıf, lisans ve yapay zekâ kullanımı
 

@@ -4,9 +4,12 @@ type: software
 title: "RadarLab: An Open-Source FMCW MIMO Radar Simulator with a Browser Twin, Validated Against Detection and Estimation Theory"
 abstract: >-
   Open-source FMCW TDM-MIMO radar simulation and processing framework with a
-  NumPy reference implementation and an interactive TypeScript browser twin,
-  kept equivalent by cross-language golden vectors and validated against
-  closed-form detection and estimation theory.
+  NumPy reference implementation and an interactive TypeScript browser twin.
+  Cross-language golden vectors check numerical equivalence for synthesis,
+  MTI, FFT processing, CFAR, clustering and peak/angle estimation. The
+  simulator is validated against independent closed-form detection and
+  estimation theory, with implementation consistency checks reported
+  separately.
 authors:
   - family-names: "Erdoğan"
     given-names: "Enes"

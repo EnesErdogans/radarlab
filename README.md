@@ -38,7 +38,7 @@ Türkçe özet: [README.tr.md](README.tr.md)
 
 ## Abstract
 
-RadarLab is an open-source framework for simulating and processing frequency-modulated continuous-wave (FMCW) radar with time-division-multiplexed MIMO (TDM-MIMO) arrays. It has two implementations. The Python implementation is the reference: it synthesises the exact beat signal, including residual video phase, intra-chirp motion and TDM timing, and it models hardware impairments such as range-correlated phase noise, Tx–Rx leakage, IQ imbalance, quantisation, ground multipath and FMCW interference. The TypeScript implementation runs the same chain in a Web Worker at interactive frame rates. Cross-language golden vectors keep the two numerically equivalent. The processing chain contains windowed range and Doppler FFTs, MTI, CA/GO/SO/OS-CFAR with exact Gamma(K) thresholds for non-coherent integration over K virtual channels, FFT/MVDR/MUSIC direction finding, clustering, an EKF tracker and micro-Doppler analysis. Eleven validation experiments compare the simulator with closed-form theory (false-alarm and detection probabilities, Cramér–Rao bounds, phase-noise spectra, two-ray nulls, micro-Doppler extent) and test a closed loop through TI mmWave `.cfg` files and DCA1000 raw data. All validations pass.
+RadarLab is an open-source framework for simulating and processing frequency-modulated continuous-wave (FMCW) radar with time-division-multiplexed MIMO (TDM-MIMO) arrays. It has two implementations. The Python implementation is the reference: it synthesises the exact beat signal, including residual video phase, intra-chirp motion and TDM timing, and it models hardware impairments such as range-correlated phase noise, Tx–Rx leakage, IQ imbalance, quantisation, ground multipath and FMCW interference. The TypeScript implementation runs the same chain in a Web Worker at interactive frame rates. Cross-language golden vectors check that the two are numerically equivalent for synthesis (complex and real IF, both amplitude modes), MTI, FFT processing, CA/GO/SO/OS-CFAR, clustering, peak, angle and elevation estimation and the range–angle map (Section 6.1 lists what is and is not covered). The processing chain contains windowed range and Doppler FFTs, MTI, CA/GO/SO/OS-CFAR with exact Gamma(K) thresholds for non-coherent integration over K virtual channels, FFT/MVDR/MUSIC direction finding, clustering, an EKF tracker and micro-Doppler analysis. Eight validation experiments compare the simulator with independent closed-form theory (false-alarm and detection probabilities, Cramér–Rao bounds, phase-noise spectra, two-ray nulls, interference geometry, micro-Doppler extent). Five further experiments are implementation consistency checks (IQ-image identity, blade-flash periodicity, TDM compensation, golden-file regeneration, and a closed loop through TI mmWave `.cfg` files and DCA1000 raw data). All 8 theory validations and all 5 consistency checks pass.
 
 ---
 
@@ -59,16 +59,16 @@ Several simulators and toolkits exist (Table 1). Most published validation is ei
 | Schüßler et al. ray tracer [3] | Not public | Raw, large MIMO arrays | – | Yes, against MIMO measurements | No |
 | SHENRON [4] | Open source | MIMO radar data from lidar and camera | – | Downstream algorithm equivalence | No |
 | sar-sim [10] | Open (Python GUI) | FMCW SAR raw data | – | – | Desktop GUI |
-| **RadarLab** | MIT, pure NumPy/SciPy and TypeScript | Raw TDM-MIMO beat signal | Phase noise (range-correlated), leakage, IQ imbalance, ADC, IF filters, Swerling, two-ray multipath, FMCW interference | Monte-Carlo agreement with theory (V1–V11) | Yes, GitHub Pages |
+| **RadarLab** | MIT, pure NumPy/SciPy and TypeScript | Raw TDM-MIMO beat signal | Phase noise (range-correlated), leakage, IQ imbalance, ADC, IF filters, Swerling, two-ray multipath, FMCW interference | Monte-Carlo agreement with closed-form theory (8 experiments) plus 5 consistency checks | Yes, GitHub Pages |
 
 RadarLab does not try to compete on scene realism: it uses point and extended-scatterer models, not ray tracing. Its focus is the fidelity and verifiability of the signal chain.
 
 **Contributions.**
 
 1. An open (MIT) reference implementation of the exact FMCW TDM-MIMO beat model, with binding conventions for coordinates, signs, data layout and normalisation ([`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md)).
-2. A validation matrix of eleven experiments (V1–V11) against closed-form theory, with reproducible scripts and a generated report ([`python/examples/out/validation_report.md`](python/examples/out/validation_report.md)).
-3. Exact CFAR thresholds for non-coherent integration over K virtual channels (Gamma(K) noise) for CA, GO, SO and OS-CFAR, and a quantification of the threshold error that results from using the single-channel formula (Section 5.3).
-4. A zero-install browser twin whose numerical equivalence to the reference is enforced by cross-language golden vectors in continuous integration.
+2. A validation matrix with reproducible scripts and a generated report ([`python/examples/out/validation_report.md`](python/examples/out/validation_report.md)). It keeps validations against independent closed-form theory (8 experiments) apart from implementation consistency checks (5 experiments).
+3. A verified implementation of the known exact CFAR thresholds for non-coherent integration over K channels (Gamma(K) noise: CA in closed form, OS/GO/SO by quadrature), and a quantification of the error made by a common misuse: applying the single-channel formula to the K-channel sum (Section 5.3). The exact thresholds themselves are classical results [37, 38]; the contribution is the checked implementation and the practitioner warning.
+4. A zero-install browser twin. Its numerical equivalence to the reference is checked in continuous integration by cross-language golden vectors for synthesis, MTI, FFT processing, all four CFAR types, clustering, peak/angle/elevation estimation and the range–angle map (Section 6.1).
 5. A closed real-data path: TI mmWave `.cfg` → simulation → int16 DCA1000 `.bin` → reader → the same processing chain that is used for real captures.
 6. One framework for automotive (77 GHz) and counter-UAS (24 GHz, micro-Doppler) scenarios, including a line-blade rotor model with blade flashes and a two-segment flapping-wing bird model.
 
@@ -164,19 +164,19 @@ R_{\max} = \frac{f_s c}{2S}\ \text{(complex IF; half for real IF)},\qquad
 v_{\max} = \frac{\lambda}{4 T_e}.
 $$
 
-The angle resolution in Table 2 is the boresight Rayleigh value $\Delta\theta \approx 1/(N_{\mathrm{ULA}}\, d)$ rad for a uniform linear array of $N_{\mathrm{ULA}}$ elements with spacing $d = \lambda/2$. This is the same value that the web parameter budget shows.
+The angle resolution in Table 2 is the boresight Rayleigh value $\Delta\theta = \arcsin\!\big(1/(N_{\mathrm{ULA}}\, d)\big)$ for a uniform linear array of $N_{\mathrm{ULA}}$ elements with spacing $d = \lambda/2$ (in wavelengths). This is the formula of the web parameter budget (`derive()` in [`web/src/config/radar.ts`](web/src/config/radar.ts)), so the table shows the same values: 14.5° for 8 elements and 30.0° for 4 elements. The small-angle form $1/(N_{\mathrm{ULA}} d)$ rad gives 14.3° and 28.6°.
 
 *Table 2. Presets. Python values are those stored in [`golden/presets.json`](golden/presets.json); web values follow from the same formulas applied to the web presets in [`web/src/config/radar.ts`](web/src/config/radar.ts).*
 
 | Preset | $f_c$ (GHz) | Array | $B_{\mathrm{eff}}$ (MHz) | ΔR (m) | $R_{\max}$ (m) | Δv (m/s) | $v_{\max}$ (m/s) | ULA elements | Δθ (°) |
 |---|---|---|---|---|---|---|---|---|---|
-| Python `automotive_77ghz` | 77 | 2 TX × 4 RX | 384 | 0.390 | 99.9 | 0.238 | 15.21 | 8 | 14.3 |
-| Python `awr1843_like` | 77 | 3 TX × 4 RX (one TX elevated) | 768 | 0.195 | 50.0 | 0.253 | 8.11 | 8 (azimuth) | 14.3 |
-| Python `drone_24ghz` | 24 | 2 TX × 4 RX | 150 | 0.999 | 511.6 | 0.407 | 26.02 | 8 | 14.3 |
-| Python `micro_doppler_24ghz` | 24 | 1 TX × 4 RX | 250 | 0.600 | 38.4 | 1.220 | 156.14 | 4 | 28.6 |
-| Web automotive | 77 | 2 TX × 4 RX | 768 | 0.195 | 50.0 | 0.190 | 12.17 | 8 | 14.3 |
-| Web drone surveillance | 24 | 1 TX × 4 RX | 150 | 0.999 | 511.6 | 0.222 | 28.39 | 4 | 28.6 |
-| Web micro-Doppler fast-chirp | 24 | 1 TX × 4 RX | 250 | 0.600 | 76.7 | 1.220 | 156.14 | 4 | 28.6 |
+| Python `automotive_77ghz` | 77 | 2 TX × 4 RX | 384 | 0.390 | 99.9 | 0.238 | 15.21 | 8 | 14.5 |
+| Python `awr1843_like` | 77 | 3 TX × 4 RX (one TX elevated) | 768 | 0.195 | 50.0 | 0.253 | 8.11 | 8 (azimuth) | 14.5 |
+| Python `drone_24ghz` | 24 | 2 TX × 4 RX | 150 | 0.999 | 511.6 | 0.407 | 26.02 | 8 | 14.5 |
+| Python `micro_doppler_24ghz` | 24 | 1 TX × 4 RX | 250 | 0.600 | 38.4 | 1.220 | 156.14 | 4 | 30.0 |
+| Web automotive | 77 | 2 TX × 4 RX | 768 | 0.195 | 50.0 | 0.190 | 12.17 | 8 | 14.5 |
+| Web drone surveillance | 24 | 1 TX × 4 RX | 150 | 0.999 | 511.6 | 0.222 | 28.39 | 4 | 30.0 |
+| Web micro-Doppler fast-chirp | 24 | 1 TX × 4 RX | 250 | 0.600 | 76.7 | 1.220 | 156.14 | 4 | 30.0 |
 
 Note that $v_{\max}$ is reduced by $n_{Tx}$ in TDM-MIMO. The `awr1843_like` preset (3 TX, $T_c$ = 40 µs) therefore has $v_{\max}$ = 8.11 m/s, which is easily exceeded by road targets. Section 5.5 describes the compensation of the motion-induced phase between TX slots.
 
@@ -209,7 +209,7 @@ The web engine uses the same point and car models, a pedestrian with arms, legs 
 | IF filtering | Causal Butterworth high-pass and low-pass along fast time (zero initial state, so the start-of-chirp transient appears) | The TI-specific filter (two first-order HPF sections at the TI corner frequencies, 4th-order LPF) is on the roadmap |
 | ADC | Mid-tread uniform quantiser with clipping per I/Q rail; full scale set by the thermal-noise rms in LSB, an explicit value, or 4× the rail rms | Default 12 bits [19] |
 | IQ imbalance | $y = \mu x + \nu x^*$ with $\mu = (1+g e^{-j\delta})/2$, $\nu = (1-g e^{j\delta})/2$; image rejection ratio $\lvert\mu\rvert^2/\lvert\nu\rvert^2$ [20] | – |
-| Two-ray multipath | Flat ground: direct path, two mixed paths (amplitude 2Γ) and the image path (Γ²) [21] | The mixed path is an equivalent scatterer on the direct line of sight, so its elevation is approximate; null positions are exact (V5) |
+| Two-ray multipath | Flat ground: direct path, two mixed paths (amplitude 2Γ) and the image path (Γ²) [21] | The mixed path is an equivalent scatterer on the direct line of sight, so its elevation is approximate. Null positions agree with the closed form within 0.07 % when λ is taken at the ADC-window centre (V5) |
 | FMCW interference | A second FMCW radar received one way; IF content kept where the instantaneous difference frequency lies inside the IF bandwidth [22] | Ideal low-pass mask on the instantaneous difference frequency |
 | Real IQ | Real part of the complex cube; the range FFT keeps bins 0…N/2−1 | – |
 
@@ -254,7 +254,11 @@ where $I_u(a,b)$ is the regularised incomplete beta function, so $u$ = `scipy.sp
 | 4 | 4.5 dB | 4.2 dB | 4.1 dB |
 | 8 | 6.1 dB | 5.7 dB | 5.6 dB |
 
-So for K = 4–8 virtual channels and N = 16–32 training cells, the single-channel formula sets the threshold 4.1–6.1 dB too high. The detector then works at a much lower false-alarm rate than designed and loses a comparable amount of detection SNR. The exact factors are verified by Monte-Carlo simulation in V1 (Section 6.2).
+So for K = 4–8 virtual channels and N = 16–32 training cells, the single-channel formula sets the threshold 4.1–6.1 dB too high. The detector then works at a much lower false-alarm rate than designed (about 5·10⁻¹³ instead of 10⁻⁴ in the reviewer's calculation) and loses a comparable amount of detection SNR (3.9–7.4 dB for Pd = 0.5–0.9).
+
+**What is new and what is not.** The exact thresholds are not a new theory. Under non-coherent integration of M pulses or K channels the noise is Gamma distributed, and CFAR analyses for this case are classical; see, for example, Shor and Levanon for CA- and OS-CFAR with pulse integration [37] and Ritcey for the greatest-of (MX-MLD) detector with non-coherent integration [38]. What RadarLab adds is a verified implementation of these thresholds for all four detector types, and a number for the cost of a common pitfall: applying the single-channel formula after summing |X_k|² over the virtual channels.
+
+**Monte-Carlo coverage.** V1 checks the empirical false-alarm rate for K = 1, 4 and 8 and all four detectors with N = 54 training cells in the interior and 29–47 cells at the range edges (Section 6.2). The N = 16–32 rows of the table above come from the exact formula. They are not separately simulated in the repository, but an independent Monte-Carlo in review round 1 (2·10⁶ trials per case, K ∈ {1, 4, 8}, N ∈ {16, 32}, all four detectors) agreed with all of them (|z| < 2).
 
 ### 5.4 Clustering and peak refinement
 
@@ -267,11 +271,12 @@ Before angle estimation, the TX-$t$ channels are multiplied by $\exp(-j 2\pi (2v
 - **FFT DoA.** The azimuth ULA is built from the z = 0 virtual channels with unique x positions on a grid of the smallest spacing $d$ (gaps are zero-filled). The angle spectrum uses the $+j$ kernel, $A[a] = \sum_k x_k \exp(+j2\pi k a/N_a)$, with zero padding to $N_a$ = 64, so that bin $a$ maps to $\sin\theta = (a - N_a/2)/(N_a d)$ and $\theta > 0$ falls in a bin above $N_a/2$.
 - **MVDR** [27] and **MUSIC** [28] (Python) use the same negative-sign steering vectors $a_k = \exp(-j2\pi(x_k\sin\theta\cos\varphi + z_k\sin\varphi))$, with optional forward–backward averaging and diagonal loading. A Bartlett spectrum is also available.
 - **Elevation** is estimated from virtual-channel pairs with the same x and different z: $\varphi = \arcsin\!\big(-\arg(\sum x_{\mathrm{low}}^{*} x_{\mathrm{high}})/(2\pi\Delta z)\big)$.
+- **Point cloud.** The azimuth FFT measures the direction cosine $u_x = \sin\theta\cos\varphi$, not $\sin\theta$. The Python point cloud therefore uses $x = R u_x$, $z = R\sin\varphi$, $y = R\sqrt{1 - u_x^2 - \sin^2\varphi}$ and reports $\theta = \operatorname{atan2}(x, y)$. Without an elevation estimate (planar arrays, and the web engine) $\varphi$ is taken as 0, so a target at elevation $\varphi$ is reported at $\arcsin(\sin\theta\cos\varphi)$. This is a bias of 0.29° at θ = −18°, φ = 10° (golden file `awr1843_elevated`), and it grows with φ.
 - A **range–angle map** is computed for display.
 
 ### 5.6 Tracking
 
-The tracker is an extended Kalman filter with a constant-velocity, white-noise-acceleration model and state $[p_x, p_y, v_x, v_y]$ [29]. The measurement is $z = [R, \theta, v_r]$ with $v_r = (p_x v_x + p_y v_y)/R$; angles are wrapped in the innovation. Association is global nearest neighbour (Hungarian algorithm) on the Mahalanobis distance with a χ² gate. Tracks are confirmed after M of N hits (default 3 of 5) and deleted after a number of consecutive misses (default 3). The web version uses a χ² gate of 9.21, wraps the Doppler innovation, merges measurements of extended targets with a DBSCAN-style rule, and suppresses new tracks near existing ones.
+The tracker is an extended Kalman filter with a constant-velocity, white-noise-acceleration model and state $[p_x, p_y, v_x, v_y]$ [29]. The measurement is $z = [R, \theta, v_r]$ with $v_r = (p_x v_x + p_y v_y)/R$; angles are wrapped in the innovation. Association is global nearest neighbour (Hungarian algorithm) on the Mahalanobis distance with a χ² gate. Tracks are confirmed after M of N hits (default 3 of 5) and deleted after a number of consecutive misses (default 3). The Python tracker has no extended-target merging, so a car that produces several detections can start several tracks (the quick-start example in Section 9.1 gives three confirmed tracks for one `Car`). The web version uses a different design: a χ² gate of 9.21 on the position innovation, a wrapped Doppler innovation, merging of extended-target measurements with a DBSCAN-style rule, and suppression of new tracks near existing ones.
 
 ### 5.7 Micro-Doppler
 
@@ -281,57 +286,80 @@ The micro-Doppler spectrogram is a short-time Fourier transform over slow time i
 
 ## 6 Validation
 
-Validation is organised in two tiers: (T1) agreement with closed-form theory, and (T2) agreement between the two implementations. A third tier, comparison with real captures, is planned (Section 10). All numbers in this section come from [`python/examples/out/validation_report.md`](python/examples/out/validation_report.md), generated in full (paper-grade) mode by `python/examples/validation_report.py`, and from the test suites.
+RadarLab separates three kinds of evidence. (T1) **Validation against independent closed-form theory**: the output of the simulator and the processing chain is compared with a result derived independently of the code. (C) **Implementation consistency checks**: the reference comes from the same model or code, so these checks find regressions and wiring errors but cannot find a shared modelling error. (T2) **Cross-implementation agreement** between Python and TypeScript (golden vectors). A further tier, comparison with real captures, is planned (Section 10). All numbers in this section are in [`python/examples/out/validation_report.md`](python/examples/out/validation_report.md), which `python/examples/validation_report.py` generates in full (paper-grade) mode. The rest come from the test suites, as stated.
 
 ### 6.1 Cross-implementation golden vectors
 
-`python/scripts/export_golden.py` writes seven JSON files to [`golden/`](golden/): `tiny_cube`, `automotive_single`, `automotive_multi`, `automotive_velocity_alias`, `awr1843_elevated`, `cfar_alpha` and `presets`. They contain configurations, scatterers, raw cubes (tiny configurations only), range–Doppler maps, expected peaks and tolerances. All files carry `conventionVersion: 2`. The web test `tests/golden.test.ts` checks:
+`python/scripts/export_golden.py` writes the JSON files in [`golden/`](golden/). The current files are golden set 2 (`"goldenSet": 2`, `conventionVersion: 2`). [`golden/README.md`](golden/README.md) lists each file, its stored inputs and its tolerances. Every input a consumer needs is stored in the file, so no random number generator is needed to check it.
+
+- **Scenario files** (`tiny_cube`, `automotive_single`, `automotive_multi`, `automotive_velocity_alias`, `awr1843_elevated`, `tiny_mti`, `tiny_real_iq`, `tiny_physical`). They contain the configuration, scatterers, raw cubes (full cubes for tiny configurations, spot samples otherwise), range–Doppler maps and expected peaks, plus the truth values and tolerances. Together they cover MTI, real-IF sampling and the `physical` amplitude mode. `tiny_cube` also stores the range–angle map for a rectangular and a Hann angle window, and `awr1843_elevated` stores the elevation estimate and the point-cloud azimuth and x/y/z.
+- **Detection files.** `cfar_alpha` is the α table for K ∈ {1, 4, 8}. `cfar_maps` holds two fixed 20×16 power maps (K = 1 and K = 8) with CA/GO/SO/OS thresholds, per-cell α and detection masks, including the range edges, the GO/SO lead/lag split and the CA fallback. `clustering` is a stored CFAR mask with the expected 8-connected clusters, including a cluster that wraps across the Doppler seam.
+- **`tracker`**: a stored detection sequence and the Python EKF states, covariances and track statuses frame by frame. The interactive web tracker is a different design (Section 5.6). The web suite checks a TypeScript port of the Python tracker (`ReferenceTracker`) against this file; the UI tracker itself is not golden-checked.
+- **`presets`**: derived quantities, virtual arrays and windows.
+
+The web test `tests/golden.test.ts` reads every file:
 
 | Quantity | Tolerance |
 |---|---|
 | Derived parameters, preset windows | 1e-12 |
-| Raw cube, exact synthesis | 1e-9 |
-| Raw cube, phasor-recurrence synthesis | 1e-7 |
-| Range–Doppler map in dB (cells within 90 dB of the peak) | 1e-6 dB |
+| Raw cube, exact synthesis (complex and real IF, `snr` and `physical` amplitude) | 1e-9 of max |
+| Raw cube, phasor-recurrence synthesis | 1e-7 of max |
+| Range–Doppler map in dB (cells within 90 dB of the peak), with and without MTI | 1e-6 dB |
 | Peaks: integer bins | exact |
 | Peaks: fractional bins, range, velocity | 1e-6 |
-| Peaks: angle (with and without TDM compensation) | 1e-4° |
-| CFAR α: all types for K = 1; CA Gamma(K) for K = 4, 8 | table values |
+| Peaks: angle (with and without TDM compensation), elevation, point-cloud azimuth and x/y/z | 1e-4° / 1e-6 |
+| Range–angle map, rect and Hann angle window | 1e-9 of max |
+| CFAR α table, CA/GO/SO/OS, K = 1, 4, 8 | rel 1e-7 |
+| CFAR maps: thresholds, α, masks, K = 1 and 8, incl. range edges and GO/SO fallback | rel 1e-9, 0 mask differences |
+| Clustering: peaks, sizes, member cells | exact (compared as sets) |
+| Reference tracker: state, covariance, status, hits | 1e-9 |
 
-All checks pass. On the Python side (V10), the stored files are identical to a fresh export (maximum relative deviation 0 for all seven files). The OS/GO/SO rows for K > 1 are not checked in TypeScript because the web engine uses the K = 1 formulas for these detectors (Section 10).
+All checks pass. The web suite reports a worst relative threshold difference of 7e-13 on `cfar_maps` and 0 mask differences ([`web/STATUS.md`](web/STATUS.md)). Before golden set 2, the review found that the web GO/SO/OS thresholds at K = 8 were 2.6–3.3 times too high, because those types used the K = 1 formulas. Set 2 found that divergence, and the web engine now uses the exact Gamma(K) α for all four types.
 
-### 6.2 Validation matrix (V1–V11)
+The peak tolerances against truth come from the noiseless maths and are not blanket half-bin values. The fractional-bin interpolation is allowed 0.03 bin, and the FFT angle is allowed 0.05°. On top of this, each file adds the largest known deterministic offset: the range–Doppler coupling, the Doppler scaling with the ADC-window centre frequency (`fc` is the chirp *start* frequency), and the cosφ projection of a 1-D azimuth FFT. The files also store the "observable" truth with these offsets included. Against that truth, only the interpolation tolerance is allowed.
 
-*Table 3. Validation results (full mode). All 12 entries pass.*
+On the Python side (V10), the stored files are identical to a fresh export: the largest relative deviation is 0 for all 13 files.
+
+The following are **not covered** by golden vectors: noise and all random impairments, the Python-only impairments, micro-Doppler targets, MVDR/MUSIC, DBSCAN, the micro-Doppler STFT, the web OS-CFAR prefilter (the web suite tests it separately), the interactive web tracker, and zero-padded or non-Hann range/Doppler FFTs.
+
+### 6.2 Validation matrix
+
+*Table 3a. Validation against independent closed-form theory (full mode). All 8 pass.*
 
 | ID | Validation | Criterion | Measured result | Result |
 |---|---|---|---|---|
-| V1 | Noise + CFAR false-alarm rate, rect windows, fixed/CA/OS/GO/SO, K = 1 and 8, design Pfa = 1e-4 | \|log10(Pfa_sim/Pfa)\| < 0.1 | Largest \|log10 ratio\| 0.034 (OS, K = 8); 3,006,464 cells per case | PASS |
+| V1 | Noise + CFAR false-alarm rate, rect windows, fixed/CA/OS/GO/SO, K = 1, 4 and 8, design Pfa = 1e-4 | \|log10(Pfa_sim/Pfa)\| < 0.1 | Largest \|log10 ratio\| 0.028 (GO, K = 4); 3,006,464 cells per case | PASS |
 | V1c | CFAR Pfa with Hann windows (documented effect) | adjacent-cell correlation −2/3 ± 0.05 | Correlation −0.6725; Pfa ratio 1.61 (CA) and 1.57 (OS) at design 1e-3, vs 1.01 and 1.03 with rect | PASS |
-| V2 | Pd vs SNR, Swerling 0/1/3, K = 1 and 8 | theory inside the 95 % CI (verdict on 99.9 % CI) | 29 of 30 points inside the 95 % CI; 3000 trials per point | PASS |
-| V3 | RMSE vs CRLB for range, velocity, angle | efficiency CRLB/MSE ≥ 0.9 above threshold | Efficiency 0.956–1.041 for per-sample SNR from −12 dB to +6 dB | PASS |
+| V2 | Pd vs SNR, Swerling 0/1/3, K = 1 and 8, fixed threshold | theory inside the 99.9 % CI at every point (95 % CI reported) | 29 of 30 points inside the 95 % CI and 30 of 30 inside the 99.9 % CI; 3000 trials per point | PASS |
+| V3 | RMSE vs CRLB for range, velocity, angle (unwindowed ML estimator) | efficiency CRLB/MSE ≥ 0.9 above threshold | Efficiency 0.956–1.041 for per-sample SNR from −12 dB to +6 dB | PASS |
 | V4 | Phase noise, range-correlated residual (τ = 0.68 µs) | variance within ±2 %; PSD within ±0.5 dB at fτ = ½ | Variance error −0.95 %; PSD deviation −0.025 dB | PASS |
-| V5 | Two-ray ground multipath | null positions within ±1 range bin | Five nulls (15.4–77.1 m), largest error 0.19 m with a 0.39 m bin | PASS |
-| V6 | IQ imbalance image | image level = −IMRR ± 0.5 dB | IMRR 28.93 dB, image −28.93 dBc | PASS |
-| V7 | FMCW mutual interference | burst length ±1 sample; ghost ±1 range bin | Burst 6 samples in each of 4 chirps (theory 6) | PASS |
-| V8 | Micro-Doppler: rotor extent, blade flash, bird wing-beat | f_mD,max ±1 bin; flash rate ±1 %; wing-beat ±2 % | f_mD,max 12.07 kHz (theory) vs ±12.11 kHz (simulated), bin 390.6 Hz | PASS |
-| V9 | TDM-MIMO Doppler phase compensation (v = 0.8 v_max) | bias < 0.1 angle bin (N_a = 64) | Bias −2.44 bins without and below 0.001 bins with compensation | PASS |
-| V10 | Golden vectors, Python side | stored = regenerated | Maximum relative deviation 0 (7 files) | PASS |
-| V11 | DCA1000 closed loop (.cfg → sim → int16 .bin → read → process) | exact round trip; same detections; range error < ΔR/4 | Exact round trip; same 2 strong detections; range error 0.0067 m with ΔR = 0.195 m | PASS |
+| V5 | Two-ray ground multipath | null positions within 0.1 % (λ at the ADC-window centre); amplitude ±1 dB where 4sin² ≥ 1 | Five nulls (15.4–77.3 m), largest relative error 0.064 %; amplitude max deviation 0.59 dB, rms 0.11 dB | PASS |
+| V7 | FMCW mutual interference | burst length ±1 sample; ghost ±1 range bin | Burst 6 samples in each of 4 chirps (theory 6); ghost at 9.076 m vs 8.994 m (bin 0.293 m) | PASS |
+| V8 | Micro-Doppler: rotor extent, bird wing-beat | f_mD,max ±1 bin; wing-beat ±2 % | f_mD,max 12.07 kHz (theory) vs ±12.11 kHz (simulated), bin 390.6 Hz; wing-beat 5.003 Hz vs 5 Hz (+0.067 %) | PASS |
 
-**False alarms (V1, V1c).** With rectangular windows, the empirical false-alarm rates of all four CFAR types agree with the design value for both K = 1 and K = 8 (the K = 8 case uses the exact Gamma(K) factors of Section 5.3). With a Hann window, adjacent noise bins have a correlation of −2/3, the i.i.d. assumption breaks, and the CA false-alarm rate rises by a factor of about 1.6. Analytic CFAR tests therefore use rectangular windows.
+*Table 3b. Implementation consistency checks (full mode). All 5 pass. In each of them, the reference is produced by the same model or code.*
+
+| ID | Check | Why it is a consistency check | Measured result | Result |
+|---|---|---|---|---|
+| V6 | IQ imbalance image = −IMRR ± 0.5 dB | The model is y = μx + νx*, so image/signal = \|ν\|²/\|μ\|² holds by algebra | IMRR 28.93 dB, image −28.93 dBc (error 1e-11 dB) | PASS |
+| V8f | Blade-flash rate ±1 % (N_b = 2, 3) | The rotor model is strictly periodic by construction | Relative error −1e-16 and −4e-6 | PASS |
+| V9 | TDM-MIMO Doppler phase compensation (v = 0.8 v_max), bias < 0.1 angle bin | Synthesiser and compensator use the same t·Tc timing. An independent bistatic synthesiser in review round 1 confirmed the physics (θ = 20.05° for a +20° target) | Bias −2.44 bins without and below 0.001 bins with compensation | PASS |
+| V10 | Golden vectors, Python side: stored = regenerated | Same code on both sides | Largest relative deviation 0 (13 files) | PASS |
+| V11 | DCA1000 closed loop (.cfg → sim → int16 .bin → read → process) | Writer and reader share one byte-layout assumption; no real capture is used | Exact round trip; same 2 strong detections; range error 0.0067 m with ΔR = 0.195 m | PASS |
+
+**False alarms (V1, V1c).** With rectangular windows, the empirical false-alarm rates of all four CFAR types agree with the design value for K = 1, 4 and 8 (the K > 1 cases use the exact Gamma(K) factors of Section 5.3). With a Hann window, adjacent noise bins have a correlation of −2/3, the i.i.d. assumption breaks, and the CA false-alarm rate rises by a factor of about 1.6. Analytic CFAR tests therefore use rectangular windows.
 
 ![Empirical vs design Pfa](python/examples/out/cfar_pfa.png)
 
 *Figure 3. Empirical vs design false-alarm probability for CA- and OS-CFAR (`python/examples/cfar_pfa.py`).*
 
-**Detection (V2).** The synthesiser and detector are compared with closed-form Pd for Swerling 0 (generalised Marcum Q), Swerling 1 with the fluctuation shared by all K channels, and Swerling 3 [30, 15]. The one point outside the 95 % interval (K = 8, SW3, 0 dB: 0.142 simulated vs 0.158 theory) is inside the 99.9 % interval used to bound multiple-comparison failures over 30 points.
+**Detection (V2).** The synthesiser and detector are compared with closed-form Pd for Swerling 0 (generalised Marcum Q), Swerling 1 with the fluctuation shared by all K channels, and Swerling 3 [30, 15]. The pass criterion is fixed in advance: theory must lie inside the 99.9 % Wilson interval at every one of the 30 points (a Bonferroni-style bound for 30 comparisons); the 95 % intervals are reported as well. The one point outside the 95 % interval (K = 8, SW3, 0 dB: 0.142 simulated vs 0.158 theory) is inside the 99.9 % interval. V2 uses a fixed threshold, not a CFAR. The CA-CFAR Pd for Swerling 1, $(1 + \alpha/(N(1+\chi)))^{-N}$, is checked separately by a Monte-Carlo unit test (`test_pd_ca_cfar_swerling1_monte_carlo`).
 
 ![Pd vs SNR](python/examples/out/val_v2_pd.png)
 
 *Figure 4. Probability of detection vs per-sample SNR, simulation vs theory (V2).*
 
-**Estimation (V3).** Range, velocity and angle are estimated with an unwindowed maximum-likelihood tone estimator and compared with the Cramér–Rao bound for a single complex exponential with unknown amplitude and phase [31, 32]. Above the threshold region the estimator is efficient (efficiency 0.96–1.04). At −20 dB per-sample SNR and below, the RMSE departs strongly from the bound, which is the expected threshold effect.
+**Estimation (V3).** Range, velocity and angle are estimated with an unwindowed maximum-likelihood tone estimator and compared with the Cramér–Rao bound for a single complex exponential with unknown amplitude and phase [31, 32]. Above the threshold region the estimator is efficient (efficiency 0.96–1.04). At −20 dB per-sample SNR and below, the RMSE departs strongly from the bound, which is the expected threshold effect. Note that V3 validates the *simulated data* with an efficient estimator; it does not show that the processing chain is efficient. The chain uses Hann windows and parabolic interpolation on log power, which is biased (up to about 0.02 bin in the noiseless golden cases) and loses SNR to the window. The angle bound assumes that angle and velocity are decoupled; for TDM-MIMO with an unknown velocity the TX-slot Doppler phase couples them, so the bound is optimistic in that case.
 
 ![RMSE vs CRLB (validation)](python/examples/out/val_v3_crlb.png)
 
@@ -341,7 +369,7 @@ All checks pass. On the Python side (V10), the stored files are identical to a f
 
 *Figure 6. The same comparison from the stand-alone example `python/examples/rmse_crlb.py`.*
 
-**Phase noise and multipath (V4, V5).** The variance of the residual $\varphi(t) - \varphi(t-\tau)$ and its PSD follow $L(f)\cdot 4\sin^2(\pi f \tau)$ [17]. The two-ray nulls match the closed form; the rms deviation from the $4\sin^2$ law is 1.61 dB, excluding the nulls.
+**Phase noise and multipath (V4, V5).** The variance of the residual $\varphi(t) - \varphi(t-\tau)$ and its PSD follow $L(f)\cdot 4\sin^2(\pi f \tau)$ [17]. The two-ray nulls match the closed form within 0.064 % once λ is taken at the centre of the ADC window, $\lambda_c = c/(f_c + S\,t_{\mathrm{mid}})$, which is 0.27 % above $f_c$ for this configuration. With λ at the chirp start frequency $f_c$ the predicted nulls would be 0.27 % too close. Away from the nulls (where $4\sin^2 \ge 1$) the simulated amplitude follows the $4\sin^2$ law within 0.59 dB (rms 0.11 dB).
 
 ![Phase noise residual](python/examples/out/val_v4_phase_noise.png)
 
@@ -351,11 +379,11 @@ All checks pass. On the Python side (V10), the stored files are identical to a f
 
 *Figure 8. Two-ray ground multipath: received power vs range and null positions (V5).*
 
-**Micro-Doppler (V8).** The maximum micro-Doppler frequency of a rotor, the blade-flash rate for $N_b$ = 2 and 3, and the bird wing-beat frequency agree with theory within the stated tolerances.
+**Micro-Doppler (V8, V8f).** The maximum micro-Doppler frequency of a rotor and the bird wing-beat frequency agree with the closed-form kinematics within the stated tolerances (V8). The blade-flash rate for $N_b$ = 2 and 3 (V8f) is only a consistency check, because the rotor model is periodic by construction.
 
 ![Micro-Doppler validation](python/examples/out/val_v8_micro_doppler.png)
 
-*Figure 9. Rotor micro-Doppler extent, blade flashes and bird wing-beat (V8).*
+*Figure 9. Blade flashes (V8f) and bird wing-beat (V8).*
 
 ### 6.3 Example figures
 
@@ -375,11 +403,11 @@ All checks pass. On the Python side (V10), the stored files are identical to a f
 
 | Suite | Command | Tests |
 |---|---|---|
-| Python, default | `pytest -m "not slow"` | 114 passed |
-| Python, Monte-Carlo (paper-grade sizes) | `pytest -m slow` | 7 |
-| Web (Vitest), 6 files | `npm test` | 79 passed |
+| Python, default | `pytest -m "not slow"` | 137 passed |
+| Python, Monte-Carlo (paper-grade sizes) | `pytest -m slow` | 8 passed |
+| Web (Vitest), 7 files | `npm test` | 119 passed |
 
-The Python tests cover analytic range/Doppler/angle bins, CFAR factors and Pfa, Swerling Pd, DoA, impairments, micro-Doppler laws (including the flash-rate law for $N_b$ = 2, 3, 4, 5), the tracker, TI I/O and the golden vectors. The web tests cover FFT vs DFT, window sidelobes, derived parameters, analytic bins (negative velocity, aliasing, range–Doppler coupling), TDM-compensated angle, recurrence vs exact synthesis, CFAR Pfa within ±15 % for all four types, OS vs CA and SO vs GO masking, Hungarian assignment, EKF convergence, track life cycle, full-chain tracking, micro-Doppler spread and the golden vectors. Both suites run in CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+The Python tests cover analytic range/Doppler/angle bins, CFAR factors and Pfa, Swerling Pd, DoA, impairments, micro-Doppler laws (including the flash-rate law for $N_b$ = 2, 3, 4, 5), the tracker, TI I/O and the golden vectors. The web tests cover FFT vs DFT, window sidelobes, derived parameters, analytic bins (negative velocity, aliasing, range–Doppler coupling), TDM-compensated angle, recurrence vs exact synthesis, CFAR Pfa within ±10 % for all four types at K = 1 and K = 4, OS vs CA and SO vs GO masking, Hungarian assignment, EKF convergence, track life cycle, full-chain tracking, micro-Doppler spread and the golden vectors. Both suites run in CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)); the Python suite runs on Python 3.10 and 3.12.
 
 ---
 
@@ -493,7 +521,7 @@ python micro_doppler.py
 python micro_doppler_regimes.py
 python cfar_pfa.py
 python rmse_crlb.py
-python validation_report.py            # full V1–V11 report; add --quick for small sizes
+python validation_report.py            # full report (theory validations + consistency checks); --quick for small sizes
 ```
 
 Outputs are written to `python/examples/out/`.
@@ -508,7 +536,7 @@ npm test           # Vitest, including golden vectors
 npm run build      # type-check and production build to web/dist
 ```
 
-The Pages workflow ([`.github/workflows/pages.yml`](.github/workflows/pages.yml)) deploys `web/dist` on every push to `main`.
+The Pages workflow ([`.github/workflows/pages.yml`](.github/workflows/pages.yml)) runs the web tests and then deploys `web/dist` on every push to `main`. A build that fails its tests is not deployed.
 
 ### 9.4 Repository layout
 
@@ -529,7 +557,7 @@ radarlab/
 │   │   ├── metrics.py            CRLB, ML estimator, analytic Pd
 │   │   ├── pipeline.py           simulate_frame, process_frame, Simulator
 │   │   ├── golden.py             golden-vector case builders
-│   │   └── validation.py         validation matrix V1–V11
+│   │   └── validation.py         validation matrix (V1–V11, V8f; theory vs consistency)
 │   ├── tests/                    pytest
 │   ├── examples/                 figure scripts; output in examples/out/
 │   └── scripts/export_golden.py
@@ -548,11 +576,11 @@ radarlab/
 **Current limitations.**
 
 - **Scene realism.** Targets are point or extended-scatterer models. There is no ray tracing, no aspect-dependent RCS, no element patterns and no distributed (σ⁰) clutter.
-- **CFAR in the web engine.** The Python reference uses exact Gamma(K) factors for CA, OS, GO and SO. The web engine uses the exact Gamma(K) factor only for CA; GO, SO and OS use the K = 1 formulas. For K > 1 these thresholds are conservative (too high).
+- **Elevation without a planar array.** For arrays without vertical diversity φ is taken as 0, so targets with z ≠ 0 are reported at asin(sinθ·cosφ), a bias of 0.29° at φ = 10° (Section 5.5).
 - **Impairments in the web engine.** Phase noise, leakage, IQ imbalance, ADC, IF filters, multipath and interference exist only in Python. The web drone uses a point-blade model, not the line-blade model.
 - **Approximations.** The two-ray mixed path is placed on the direct line of sight (approximate elevation). Interference uses an ideal low-pass mask. GO/SO factors at range edges use n = min(halves). For $\lvert v\rvert > v_{\max}$, TDM compensation uses the aliased velocity, so the angle is biased. SW2/SW4 decorrelate per chirp, not per frame and channel.
 - **Window correlation.** Analytic CFAR results hold for rectangular windows; with Hann the false-alarm rate is about 1.6 times the design value (V1c).
-- **Tracker.** Constant-velocity EKF without IMM; extended targets can briefly create an extra track in the web application.
+- **Tracker.** Constant-velocity EKF without IMM. The Python tracker has no extended-target merging, so one car can produce several tracks. In the web application, extended targets can briefly create an extra track.
 - **Web performance.** Synthesis dominates the frame time; the drone preset does not reach real time on the test machine. The spectrogram time axis is in frames and does not show gaps.
 - **Real data.** The DCA1000 path is validated in a closed loop with simulated data. Validation on public raw captures and own AWR-series captures is not yet done.
 
@@ -561,7 +589,7 @@ radarlab/
 1. TI IF-filter model (two first-order HPF sections at the TI corner frequencies, 4th-order LPF) and chirp nonlinearity.
 2. Element patterns and channel calibration errors, distributed clutter, Fresnel reflection coefficient for multipath, full Boulic pedestrian model.
 3. Simulation vs real data on public DCA1000 datasets and own AWR1843 captures (noise floor, phase-noise skirt, corner reflector, fan or drone micro-Doppler).
-4. Exact Gamma(K) GO/SO/OS factors and selected impairments in the web engine; WebAssembly SIMD for synthesis; upload of real captures in the browser.
+4. Selected impairments in the web engine; WebAssembly SIMD for synthesis; upload of real captures in the browser.
 5. Drone vs bird micro-Doppler case study with a simple classifier.
 
 ---
@@ -595,9 +623,9 @@ RadarLab is released under the [MIT License](LICENSE). Copyright (c) 2026 Enes E
 
 [2] S. Sun, A. P. Petropulu and H. V. Poor, "MIMO Radar for Advanced Driver-Assistance Systems and Autonomous Driving: Advantages and Challenges", *IEEE Signal Processing Magazine*, vol. 37, no. 4, pp. 98–117, 2020. doi:[10.1109/MSP.2020.2978507](https://doi.org/10.1109/MSP.2020.2978507).
 
-[3] C. Schüßler et al., "A Realistic Radar Ray Tracing Simulator for Large MIMO-Arrays in Automotive Environments", *IEEE Journal of Microwaves*, vol. 1, no. 4, pp. 962–974, 2021. (DOI unverified.)
+[3] C. Schüßler et al., "A Realistic Radar Ray Tracing Simulator for Large MIMO-Arrays in Automotive Environments", *IEEE Journal of Microwaves*, vol. 1, no. 4, pp. 962–974, 2021. doi:[10.1109/JMW.2021.3104722](https://doi.org/10.1109/JMW.2021.3104722).
 
-[4] K. Bansal et al., "SHENRON – Scalable, High Fidelity and Efficient Radar Simulation", *IEEE Robotics and Automation Letters*, 2023. <https://github.com/Kshitizbansal/shenron-radar-simulator> (Author list, volume, pages unverified.)
+[4] K. Bansal, G. Reddy and D. Bharadia, "SHENRON – Scalable, High Fidelity and Efficient Radar Simulation", *IEEE Robotics and Automation Letters*, vol. 9, no. 2, pp. 1644–1651, 2024. <https://github.com/Kshitizbansal/shenron-radar-simulator>
 
 [5] Z. F. Magosi et al., "A Survey on Modelling of Automotive Radar Sensors for Virtual Test and Validation of Automated Driving", *Sensors*, vol. 22, no. 15, art. no. 5693, 2022. doi:[10.3390/s22155693](https://doi.org/10.3390/s22155693).
 
@@ -617,7 +645,7 @@ RadarLab is released under the [MIT License](LICENSE). Copyright (c) 2026 Enes E
 
 [13] J. Martin and B. Mulgrew, "Analysis of the Theoretical Radar Return Signal from Aircraft Propeller Blades", *Proc. IEEE International Radar Conference*, pp. 569–572, 1990. (Record not retrievable; details unverified.)
 
-[14] S. Rahman and D. A. Robertson, "Radar Micro-Doppler Signatures of Drones and Birds at K-band and W-band", *Scientific Reports*, vol. 8, 2018. doi:[10.1038/s41598-018-35880-9](https://doi.org/10.1038/s41598-018-35880-9). (Article number unverified.)
+[14] S. Rahman and D. A. Robertson, "Radar Micro-Doppler Signatures of Drones and Birds at K-band and W-band", *Scientific Reports*, vol. 8, art. no. 17396, 2018. doi:[10.1038/s41598-018-35880-9](https://doi.org/10.1038/s41598-018-35880-9).
 
 [15] P. Swerling, "Probability of Detection for Fluctuating Targets", *IRE Transactions on Information Theory*, vol. 6, no. 2, pp. 269–308, 1960. doi:[10.1109/TIT.1960.1057561](https://doi.org/10.1109/TIT.1960.1057561).
 
@@ -637,11 +665,11 @@ RadarLab is released under the [MIT License](LICENSE). Copyright (c) 2026 Enes E
 
 [23] M. Kronauge and H. Rohling, "Fast Two-Dimensional CFAR Procedure", *IEEE Transactions on Aerospace and Electronic Systems*, vol. 49, no. 3, pp. 1817–1823, 2013. doi:[10.1109/TAES.2013.6558022](https://doi.org/10.1109/TAES.2013.6558022).
 
-[24] P. P. Gandhi and S. A. Kassam, "Analysis of CFAR Processors in Nonhomogeneous Background", *IEEE Transactions on Aerospace and Electronic Systems*, vol. 24, no. 4, pp. 427–445, 1988. (Details unverified.)
+[24] P. P. Gandhi and S. A. Kassam, "Analysis of CFAR Processors in Nonhomogeneous Background", *IEEE Transactions on Aerospace and Electronic Systems*, vol. 24, no. 4, pp. 427–445, July 1988. doi:10.1109/7.7185. (Volume, issue, pages and date confirmed in review round 1. Citing works print the title in different ways, as "Analysis of *some* CFAR processors…" or "…in *homogeneous* background". The title and DOI were not checked on IEEE Xplore.)
 
-[25] H. Rohling, "Radar CFAR Thresholding in Clutter and Multiple Target Situations", *IEEE Transactions on Aerospace and Electronic Systems*, vol. 19, no. 4, pp. 608–621, 1983. doi:[10.1109/TAES.1983.309350](https://doi.org/10.1109/TAES.1983.309350). (Issue, end page and DOI unverified.)
+[25] H. Rohling, "Radar CFAR Thresholding in Clutter and Multiple Target Situations", *IEEE Transactions on Aerospace and Electronic Systems*, vol. 19, no. 4, pp. 608–621, 1983. doi:[10.1109/TAES.1983.309350](https://doi.org/10.1109/TAES.1983.309350). (Volume, issue and pages confirmed in review round 1; DOI not checked.)
 
-[26] J. Bechter, F. Roos and C. Waldschmidt, "Compensation of Motion-Induced Phase Errors in TDM MIMO Radars", *IEEE Microwave and Wireless Components Letters*, vol. 27, no. 12, pp. 1164–1166, 2017. (DOI unverified.)
+[26] J. Bechter, F. Roos and C. Waldschmidt, "Compensation of Motion-Induced Phase Errors in TDM MIMO Radars", *IEEE Microwave and Wireless Components Letters*, vol. 27, no. 12, pp. 1164–1166, Dec. 2017. (Details confirmed in review round 1; DOI not checked.)
 
 [27] J. Capon, "High-Resolution Frequency-Wavenumber Spectrum Analysis", *Proceedings of the IEEE*, vol. 57, no. 8, pp. 1408–1418, 1969. doi:[10.1109/PROC.1969.7278](https://doi.org/10.1109/PROC.1969.7278).
 
@@ -662,3 +690,7 @@ RadarLab is released under the [MIT License](LICENSE). Copyright (c) 2026 Enes E
 [35] T.-Y. Lim et al., "RaDICaL: A Synchronized FMCW Radar, Depth, IMU and RGB Camera Data Dataset with Low-Level FMCW Radar Signals", *Illinois Data Bank, IDB-3289560*, 2021. <https://publish.illinois.edu/radicaldata/> (Authors, exact title and associated paper venue unverified.)
 
 [36] A. Kramer, K. Harlow, C. Williams and C. Heckman, "ColoRadar: The Direct 3D Millimeter Wave Radar Dataset", 2021. (Journal version (IJRR) unverified.)
+
+[37] M. Shor and N. Levanon, "Performances of Order Statistics CFAR", *IEEE Transactions on Aerospace and Electronic Systems*, vol. 27, no. 2, pp. 214–224, 1991. doi:[10.1109/7.78295](https://doi.org/10.1109/7.78295).
+
+[38] J. A. Ritcey, "Detection Analysis of the MX-MLD with Noncoherent Integration", *IEEE Transactions on Aerospace and Electronic Systems*, vol. 26, no. 3, pp. 569–576, 1990. doi:[10.1109/7.106136](https://doi.org/10.1109/7.106136).
