@@ -1,5 +1,13 @@
 """Validation matrix V1–V11 (``docs/literature/fidelity_requirements.md`` §15).
 
+Two kinds of entries (``ValidationResult.kind``):
+
+* ``theory`` — the simulator/processing output is compared with an
+  *independent* closed-form result (V1, V1c, V2, V3, V4, V5, V7, V8);
+* ``consistency`` — implementation self-checks in which the reference is
+  produced by the same model or code (V6, V8f, V9, V10, V11). They catch
+  regressions and wiring errors but cannot detect a shared modelling error.
+
 Each ``vN_*`` function runs one validation against its analytic reference and
 returns a :class:`ValidationResult`: the numbers, the pass/fail verdict, and
 optional curve data for figures. ``quick=True`` gives a reduced Monte-Carlo
@@ -35,6 +43,7 @@ class ValidationResult:
     rows: list[dict[str, Any]] = field(default_factory=list)
     curves: dict[str, Any] = field(default_factory=dict)
     note: str = ""
+    kind: str = "theory"     # 'theory': vs independent closed form; 'consistency': implementation self-check
 
 
 def _cfg(n_tx: int = 1, n_rx: int = 1, M: int = 16, N: int = 32, **kw: Any) -> RadarConfig:
@@ -59,7 +68,7 @@ def _noise_rd(cfg_shape: tuple[int, int, int], rng: np.random.Generator, window:
 
 
 def v1_pfa(quick: bool = True, seed: int = 1) -> ValidationResult:
-    """V1: fixed-threshold and CA/OS/GO/SO Pfa vs analytic, K = 1 and 8, rect windows.
+    """V1: fixed-threshold and CA/OS/GO/SO Pfa vs analytic, K = 1, 4 and 8, rect windows.
 
     The noise path is the real one: complex white noise → rect range FFT →
     rect Doppler FFT → P = Σ_k|X_k|² → 2-D CFAR (Doppler circular, range
@@ -71,7 +80,7 @@ def v1_pfa(quick: bool = True, seed: int = 1) -> ValidationResult:
     guard, train = (1, 1), (4, 3)
     rows = []
     ok = True
-    for K in (1, 8):
+    for K in (1, 4, 8):
         frames = int(np.ceil(n_cells_target / (M * N)))
         maps = [_noise_rd((K, M, N), rng, None) for _ in range(frames)]
         T = metrics.threshold_noncoherent(pfa, K)
@@ -156,8 +165,8 @@ def v2_pd(quick: bool = True, seed: int = 3) -> ValidationResult:
             curves[f"K{K}_SW{model}"] = {"snr_db": snr_db, "sim": [a for a, _ in pds], "theory": [b for _, b in pds]}
     n_in = sum(r["in_ci95"] for r in rows)
     return ValidationResult("V2", "Pd vs SNR (synthesiser, Swerling 0/1/3, K = 1, 8)",
-                            "theory inside 95 % CI (pass verdict uses the 99.9 % CI to bound "
-                            "multiple-comparison failures)", bool(ok), rows, curves,
+                            "theory inside the 99.9 % Wilson CI at every point (Bonferroni-style bound "
+                            "for 30 comparisons; 95 % CI reported)", bool(ok), rows, curves,
                             note=f"{n_in}/{len(rows)} points inside the 95 % CI")
 
 
@@ -257,11 +266,19 @@ def v4_phase_noise(quick: bool = True, seed: int = 5) -> ValidationResult:
 # ----------------------------------------------------------------------- V5
 def v5_multipath(quick: bool = True) -> ValidationResult:
     """V5: two-ray ground multipath. Peak amplitude ratio (two-ray / free space)
-    vs d against |F|² = 4·sin²(2π·h_r·h_t/(λd)) (Γ = −1, two-way amplitude
-    factor; power factor is its square). Null positions vs d_n = 2h_r h_t/(nλ)."""
+    vs d against |F|² = 4·sin²(2π·h_r·h_t/(λ_c·d)) (Γ = −1, two-way amplitude
+    factor; power factor is its square). Null positions vs d_n = 2h_r h_t/(nλ_c).
+
+    λ_c = c/(fc + S·t_mid) is the wavelength at the centre of the ADC window
+    (t_mid = adcStartTime + N/(2fs)): ``fc`` is the chirp *start* frequency, and
+    the beat-tone phase that forms the interference pattern is sampled across
+    the window, so the effective carrier is the window-centre frequency (0.27 %
+    above fc here). Null positions are refined below the sweep step by a
+    parabola through ratio² at the three samples around each minimum."""
     cfg = _cfg(1, 1, M=2, N=256, slope=15e12)
     hr, ht = 0.5, 0.3
-    d = np.arange(15.0, 95.0, 0.1 if quick else 0.02)
+    step = 0.1 if quick else 0.02
+    d = np.arange(15.0, 95.0, step)
     ratio = np.empty_like(d)
     zt = ht - hr                       # radar at z = 0, ground at z = −h_r
     for i, di in enumerate(d):
@@ -270,7 +287,8 @@ def v5_multipath(quick: bool = True) -> ValidationResult:
         c1 = synthesize_cube(cfg, imp.two_ray(tg, hr, -1.0), noise=False)[0, 0]
         X0, X1 = np.abs(np.fft.fft(c0)), np.abs(np.fft.fft(c1))
         ratio[i] = X1.max() / X0.max()
-    lam = cfg.wavelength
+    f_c = cfg.fc + cfg.slope * (cfg.adc_start_time + 0.5 * cfg.n_samples / cfg.fs)
+    lam = C0 / f_c
     theory = 4 * np.sin(2 * np.pi * hr * ht / (lam * d)) ** 2
     nulls_th = np.array([2 * hr * ht / (n * lam) for n in range(1, 10)])
     nulls_th = nulls_th[(nulls_th > d[0]) & (nulls_th < d[-1])]
@@ -282,15 +300,28 @@ def v5_multipath(quick: bool = True) -> ValidationResult:
     rows = []
     ok = len(mins) == len(nulls_th)
     for nt in nulls_th:
-        j = mins[np.argmin(np.abs(d[mins] - nt))] if len(mins) else 0
-        err = float(d[j] - nt)
-        ok &= abs(err) < cfg.range_resolution
-        rows.append({"null_theory_m": float(nt), "null_sim_m": float(d[j]), "error_m": err,
-                     "range_bin_m": cfg.range_resolution})
-    rms_db = float(np.sqrt(np.mean((20 * np.log10(np.maximum(ratio, 1e-3) / np.maximum(theory, 1e-3))) ** 2)))
-    return ValidationResult("V5", "Two-ray ground multipath", "null positions within ±1 range bin",
+        j = int(mins[np.argmin(np.abs(d[mins] - nt))]) if len(mins) else 1
+        y = ratio[j - 1:j + 2] ** 2
+        dn = float(d[j] + step * dsp.parabolic_offset(-y[0], -y[1], -y[2]))   # minimum of y = peak of −y
+        err = dn - float(nt)
+        ok &= abs(err) / nt < 1e-3
+        rows.append({"null_theory_m": float(nt), "null_sim_m": dn, "error_m": err, "rel_err": err / float(nt),
+                     "error_fc_start_m": dn - float(nt) * f_c / cfg.fc, "range_bin_m": cfg.range_resolution})
+    # amplitude: compare away from the nulls (|F|² ≥ 1, i.e. ≥ 0 dB), where dB is well conditioned
+    m = theory >= 1.0
+    dev_db = 20 * np.log10(ratio[m] / theory[m])
+    amp_max = float(np.max(np.abs(dev_db)))
+    ok &= amp_max < 1.0
+    rms_all = float(np.sqrt(np.mean((20 * np.log10(np.maximum(ratio, 1e-3) / np.maximum(theory, 1e-3))) ** 2)))
+    return ValidationResult("V5", "Two-ray ground multipath",
+                            "null positions within 0.1 % (λ at the ADC-window centre); amplitude within "
+                            "±1 dB where 4sin² ≥ 1",
                             bool(ok), rows, {"d": d.tolist(), "sim": ratio.tolist(), "theory": theory.tolist()},
-                            note=f"rms deviation from 4sin² law {rms_db:.2f} dB (excluding nulls floor 1e-3)")
+                            note=f"Amplitude where 4sin² ≥ 1: max |deviation| {amp_max:.2f} dB, rms "
+                                 f"{float(np.sqrt(np.mean(dev_db ** 2))):.2f} dB. Over the whole sweep (floor 1e-3, "
+                                 f"dominated by the nulls) the rms is {rms_all:.2f} dB. With λ at the chirp start "
+                                 f"frequency fc the nulls would be predicted {100 * (f_c / cfg.fc - 1):.2f} % too "
+                                 "close (column error_fc_start_m).")
 
 
 # ----------------------------------------------------------------------- V6
@@ -307,7 +338,10 @@ def v6_iq_imbalance() -> ValidationResult:
     th = imp.image_rejection_db(gdb, 3.0)
     return ValidationResult("V6", "IQ imbalance image", "image level = −IMRR ± 0.5 dB",
                             abs(img_db - th) < 0.5, [{"imrr_theory_db": th, "image_sim_dbc": -img_db,
-                                                      "error_db": img_db - th}])
+                                                      "error_db": img_db - th}],
+                            note="Consistency check: the model is y = μx + νx*, so image/signal = |ν|²/|μ|² "
+                                 "holds by algebra; this verifies the implementation, not the physics.",
+                            kind="consistency")
 
 
 # ----------------------------------------------------------------------- V7
@@ -362,8 +396,9 @@ def flash_times(y: np.ndarray, te: float, min_sep: float, rel: float = 0.5) -> n
 
 
 def v8_micro_doppler(quick: bool = True) -> ValidationResult:
-    """V8: rotor max micro-Doppler 2LΩcosβ/λ (±1 bin), flash rate N_bΩ/2π (even)
-    / 2N_bΩ/2π (odd) (±1 %), bird wing-beat period (±2 %)."""
+    """V8: rotor max micro-Doppler 2LΩcosβ/λ (±1 bin) and bird wing-beat
+    frequency (±2 %), both against closed-form kinematics. The blade-flash rate
+    is a separate consistency check (:func:`v8f_flash_rate`)."""
     cfg = micro_doppler_24ghz()
     rows, ok = [], True
     curves: dict[str, Any] = {}
@@ -380,20 +415,6 @@ def v8_micro_doppler(quick: bool = True) -> ValidationResult:
     ok &= abs(e1) <= df and abs(e2) <= df
     rows.append({"check": "max micro-Doppler", "f_max_theory_hz": f_max, "f_pos_sim_hz": f_max + e1,
                  "f_neg_sim_hz": -(f_max + e2), "bin_hz": df})
-    # flash rate
-    for nb in (2, 3):
-        drn = Drone((0, 15, 0), n_rotors=1, n_blades=nb, rpm=3000.0, rotor_offsets=[[0, 0, 0]], body_rcs=0.0,
-                    blade_rcs=0.05)
-        rate_th = float(drn.flash_rate()[0])
-        yy = _rotor_slow_time(drn, cfg, 20 if quick else 60, noise=False)
-        tf = flash_times(yy, cfg.te, 0.5 / rate_th)
-        period = float(np.polyfit(np.arange(len(tf)), tf, 1)[0])
-        rel = 1 / period / rate_th - 1
-        ok &= abs(rel) < 0.01
-        rows.append({"check": f"flash rate N_b={nb}", "rate_theory_hz": rate_th, "rate_sim_hz": 1 / period,
-                     "rel_err": rel, "n_flashes": len(tf)})
-        curves[f"flash_nb{nb}"] = {"t": (np.arange(len(yy)) * cfg.te).tolist()[:4000],
-                                   "env": np.abs(yy).tolist()[:4000]}
     # bird wing-beat: periodicity of the micro-Doppler centroid
     fw = 5.0
     bcfg = _cfg(1, 1, M=256, N=32, fc=24e9, slope=250e6 / 6.4e-6, fs=5e6, chirp_period=40e-6)
@@ -419,8 +440,34 @@ def v8_micro_doppler(quick: bool = True) -> ValidationResult:
     ok &= abs(f_sim / fw - 1) < 0.02
     rows.append({"check": "bird wing-beat", "f_w_theory_hz": fw, "f_w_sim_hz": f_sim, "rel_err": f_sim / fw - 1})
     curves["bird"] = {"t": spb.times.tolist(), "centroid": cen.tolist()}
-    return ValidationResult("V8", "Micro-Doppler (rotor, blade flash, bird)",
-                            "f_mD,max ±1 bin; flash rate ±1 %; wing-beat ±2 %", bool(ok), rows, curves)
+    return ValidationResult("V8", "Micro-Doppler (rotor extent, bird wing-beat)",
+                            "f_mD,max ±1 bin; wing-beat ±2 %", bool(ok), rows, curves)
+
+
+def v8f_flash_rate(quick: bool = True) -> ValidationResult:
+    """V8f (consistency): blade-flash rate N_bΩ/2π (even N_b) / 2N_bΩ/2π (odd)
+    within ±1 %. The rotor model is strictly periodic by construction, so this
+    only checks that the synthesis and the flash-timing code agree with the
+    model's own rate; it is not an independent validation."""
+    cfg = micro_doppler_24ghz()
+    rows, ok = [], True
+    curves: dict[str, Any] = {}
+    # flash rate
+    for nb in (2, 3):
+        drn = Drone((0, 15, 0), n_rotors=1, n_blades=nb, rpm=3000.0, rotor_offsets=[[0, 0, 0]], body_rcs=0.0,
+                    blade_rcs=0.05)
+        rate_th = float(drn.flash_rate()[0])
+        yy = _rotor_slow_time(drn, cfg, 20 if quick else 60, noise=False)
+        tf = flash_times(yy, cfg.te, 0.5 / rate_th)
+        period = float(np.polyfit(np.arange(len(tf)), tf, 1)[0])
+        rel = 1 / period / rate_th - 1
+        ok &= abs(rel) < 0.01
+        rows.append({"check": f"flash rate N_b={nb}", "rate_theory_hz": rate_th, "rate_sim_hz": 1 / period,
+                     "rel_err": rel, "n_flashes": len(tf)})
+        curves[f"flash_nb{nb}"] = {"t": (np.arange(len(yy)) * cfg.te).tolist()[:4000],
+                                   "env": np.abs(yy).tolist()[:4000]}
+    return ValidationResult("V8f", "Blade-flash rate (rotor model self-consistency)", "flash rate ±1 %",
+                            bool(ok), rows, curves, kind="consistency")
 
 
 # ----------------------------------------------------------------------- V9
@@ -445,13 +492,31 @@ def v9_tdm() -> ValidationResult:
         rows.append({"theta_deg": th, "v_over_vmax": 0.8, "bias_uncomp_bins": a_u - truth,
                      "bias_comp_bins": a_c - truth})
     return ValidationResult("V9", "TDM-MIMO Doppler phase compensation", "bias < 0.1 angle bin (Na = 64)",
-                            bool(ok), rows)
+                            bool(ok), rows, kind="consistency",
+                            note="Consistency check: synthesiser and compensator use the same t·Tc timing, so a "
+                                 "shared timing error would not be detected. An independent bistatic "
+                                 "first-principles synthesiser (review round 1) confirmed the physics.")
 
 
 # ----------------------------------------------------------------------- V10
+def _max_rel_dev(a, b) -> float:
+    """Largest relative deviation between two JSON trees (inf on structural mismatch)."""
+    if isinstance(a, dict):
+        if not isinstance(b, dict) or a.keys() != b.keys():
+            return float("inf")
+        return max([_max_rel_dev(a[k], b[k]) for k in a], default=0.0)
+    if isinstance(a, list):
+        if not isinstance(b, list) or len(a) != len(b):
+            return float("inf")
+        return max([_max_rel_dev(x, y) for x, y in zip(a, b)], default=0.0)
+    if isinstance(a, (int, float)) and not isinstance(a, bool) and isinstance(b, (int, float)):
+        return abs(a - b) / max(abs(b), 1e-12) if a != b else 0.0
+    return 0.0 if a == b else float("inf")
+
+
 def v10_golden() -> ValidationResult:
     """V10 (Python side): golden vectors are deterministic and the stored files
-    match a fresh regeneration (relative ≤ 1e-12 of peak). The TS side is
+    match a fresh regeneration (relative deviation ≤ 1e-9 per value). The TS side is
     checked by the web test-suite against the same files."""
     import json
     from pathlib import Path
@@ -467,18 +532,15 @@ def v10_golden() -> ValidationResult:
             continue
         stored = json.loads(p.read_text())
         fresh = json.loads(json.dumps(fn()))
-        if "cube" in stored:
-            a = np.array(stored["cube"]["re"]) + 1j * np.array(stored["cube"]["im"])
-            b = np.array(fresh["cube"]["re"]) + 1j * np.array(fresh["cube"]["im"])
-            dev = float(np.max(np.abs(a - b)) / np.max(np.abs(b)))
-        else:
-            dev = 0.0 if stored == fresh else float("nan")
-        good = stored.get("conventionVersion") == fresh.get("conventionVersion") and (dev <= 1e-12)
+        dev = _max_rel_dev(stored, fresh)
+        good = (stored.get("conventionVersion") == fresh.get("conventionVersion")
+                and stored.get("goldenSet") == fresh.get("goldenSet") and dev <= 1e-9)
         ok &= good
-        rows.append({"file": name, "max_rel_dev": dev, "conventionVersion": stored.get("conventionVersion"),
-                     "ok": good})
+        rows.append({"file": name, "max_rel_dev": dev, "goldenSet": stored.get("goldenSet"),
+                     "conventionVersion": stored.get("conventionVersion"), "ok": good})
     return ValidationResult("V10", "Cross-language golden vectors (Python side)",
-                            "stored == regenerated; TS checks max|Δ| < 1e-9 of peak", bool(ok), rows)
+                            "stored == regenerated (rel ≤ 1e-9); TS checks max|Δ| < 1e-9 of peak", bool(ok), rows,
+                            kind="consistency")
 
 
 # ----------------------------------------------------------------------- V11
@@ -521,7 +583,11 @@ def v11_dca1000_roundtrip(tmpdir: str | None = None) -> ValidationResult:
                             "exact round trip; same strong detections; range error < ΔR/4", bool(ok),
                             [{"exact_roundtrip": exact, "same_detections": same,
                               "n_detections": int(len(strong(r_bin.points))),
-                              "max_range_err_m": float(max(errs)), "range_bin_m": cfg.range_resolution}])
+                              "max_range_err_m": float(max(errs)), "range_bin_m": cfg.range_resolution}],
+                            kind="consistency",
+                            note="Consistency check: writer and reader follow the same byte-layout assumption and "
+                                 "no real capture is used; a check against TI's readDCA1000.m or a public "
+                                 "capture is still open.")
 
 
 SAMPLE_TI_CFG = """
@@ -543,5 +609,6 @@ sensorStart
 ALL: dict[str, Callable[..., ValidationResult]] = {
     "V1": v1_pfa, "V1c": v1c_hann_deviation, "V2": v2_pd, "V3": v3_crlb, "V4": v4_phase_noise,
     "V5": v5_multipath, "V6": v6_iq_imbalance, "V7": v7_interference, "V8": v8_micro_doppler,
+    "V8f": v8f_flash_rate,
     "V9": v9_tdm, "V10": v10_golden, "V11": v11_dca1000_roundtrip,
 }
