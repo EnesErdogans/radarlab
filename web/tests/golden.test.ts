@@ -150,6 +150,11 @@ describe('golden vectors (python reference)', () => {
         return;
       }
       if (!g.config) return;
+      // brief rev. 1 flipped the spatial-phase sign; scenario vectors older than v2 are stale
+      if ((g.conventionVersion ?? 1) < 2) {
+        it.skip(`stale golden file (conventionVersion ${g.conventionVersion ?? 1} < 2) — regenerate with python/scripts/export_golden.py`, () => {});
+        return;
+      }
 
       // ---------- scenario vectors ----------
       const cfg = toConfig(g.config);

@@ -142,7 +142,8 @@ export class Engine {
     this.P = new Float64Array(nR * M);
     this.rangeP = new Float64Array(nR);
     this.raP = new Float64Array(nR * this.A);
-    this.cfar = new Cfar2D(nR, M, s.cfar);
+    // brief rev. 1: CA α is Gamma(K)-exact for K non-coherently summed channels
+    this.cfar = new Cfar2D(nR, M, s.cfar, d.nVirt);
     this.det = new Detector(cfg, d, this.A, s.maxDetections);
     this.tracker = new Tracker({
       vMax: d.vMax,
@@ -161,7 +162,7 @@ export class Engine {
     const wr = s.cfar.guardR + s.cfar.trainR,
       wd = s.cfar.guardD + s.cfar.trainD;
     const nTrain = (2 * wr + 1) * (2 * wd + 1) - (2 * s.cfar.guardR + 1) * (2 * s.cfar.guardD + 1);
-    this.noiseAlpha = new AlphaCache(s.cfar).get('CA', nTrain);
+    this.noiseAlpha = new AlphaCache(s.cfar, d.nVirt).get('CA', nTrain);
     this.timings = Object.fromEntries(STAGES.map((k) => [k, 0])) as Record<Stage, number>;
   }
 
@@ -304,7 +305,7 @@ export class Engine {
   }
 
   /** Run one complete frame; fills `out` (if given) and returns metadata. Advances the scene. */
-  runFrame(out?: OutBuffers, advance = true): FrameMeta {
+  runFrame(out?: OutBuffers, advance = true, updateState = advance): FrameMeta {
     const cfg = this.cfg,
       d = this.d,
       s = this.s;
@@ -326,7 +327,7 @@ export class Engine {
     this.timings.cluster = t0 - t1;
 
     const meas = mergeDetections(this.det.dets, this.det.count, Math.max(2.5, 2.5 * d.rangeRes), Math.max(8, 4 * d.dv));
-    this.tracker.step(meas, cfg.framePeriod);
+    if (updateState) this.tracker.step(meas, cfg.framePeriod);
     t1 = now();
     this.timings.track = t1 - t0;
 
@@ -353,7 +354,7 @@ export class Engine {
       this.seqRe.fill(0);
       this.seqIm.fill(0);
       for (let rx = 0; rx < d.nRx; rx++) {
-        const ph = -2 * Math.PI * d.virtPos[rx] * u;
+        const ph = 2 * Math.PI * d.virtPos[rx] * u; // undo the (negative) spatial phase
         const c = Math.cos(ph),
           sn = Math.sin(ph);
         for (let m = 0; m < M; m++) {
@@ -364,7 +365,7 @@ export class Engine {
           this.seqIm[m] += a * sn + b * c;
         }
       }
-      this.spec.push(this.seqRe, this.seqIm, M);
+      if (updateState) this.spec.push(this.seqRe, this.seqIm, M);
     }
     t1 = now();
     this.timings.microDoppler = t1 - t0;

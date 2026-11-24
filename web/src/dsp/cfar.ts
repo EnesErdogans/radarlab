@@ -120,12 +120,13 @@ export function quickselect(a: Float64Array, n: number, k: number): number {
 export class AlphaCache {
   private m = new Map<string, number>();
   constructor(private p: CfarParams, private gammaK = 1) {}
-  get(type: CfarType, n: number, k = 0): number {
+  get(type: CfarType | 'CA1', n: number, k = 0): number {
     const key = `${type}|${n}|${k}`;
     let a = this.m.get(key);
     if (a === undefined) {
       const pfa = this.p.pfa;
       if (type === 'CA') a = this.gammaK > 1 ? caAlphaGamma(n, this.gammaK, pfa) : caAlpha(n, pfa);
+      else if (type === 'CA1') a = caAlpha(n, pfa);
       else if (type === 'GO') a = goAlpha(n, pfa);
       else if (type === 'SO') a = soAlpha(n, pfa);
       else a = osAlpha(n, k, pfa);
@@ -258,7 +259,7 @@ export class Cfar2D {
           }
           const nTr = nLead + nLag;
           const nMin = Math.min(nLead, nLag);
-          if (nMin < nTr / 4) t = nTr > 0 ? (this.alphas.get('CA', nTr) * (sLead + sLag)) / nTr : Infinity;
+          if (nMin < nTr / 4) t = nTr > 0 ? (this.alphas.get('CA1', nTr) * (sLead + sLag)) / nTr : Infinity;
           else {
             const mLead = sLead / nLead,
               mLag = sLag / nLag;
@@ -381,7 +382,7 @@ export class Cfar2D {
           const k = osRankIndex(n, p.osRank);
           t = this.alphas.get('OS', n, k) * quickselect(buf, n, k - 1);
         } else if (Math.min(nLead, nLag) < n / 4) {
-          t = (this.alphas.get('CA', n) * sum) / n;
+          t = (this.alphas.get('CA1', n) * sum) / n;
         } else {
           const nn = Math.min(nLead, nLag);
           const a = sLead / nLead,

@@ -1,6 +1,6 @@
 // FMCW TDM-MIMO beat-signal synthesis, exactly per PROJECT_BRIEF:
 //   τ(t) = 2R(t)/c, R(t) = R_m + vr_m (t − t_{m,t}),   t_{m,t} = m·Te + t·Tc
-//   x[k,m,n] = A·exp(j[2π(fc·τ + S·τ·t_f − ½S·τ²) + 2π(pos_k·sinθcosφ + posZ_k·sinφ) + φ0])
+//   x[k,m,n] = A·exp(j[2π(fc·τ + S·τ·t_f − ½S·τ²) − 2π(pos_k·sinθcosφ + posZ_k·sinφ) + φ0])  (brief rev. 1)
 //   t_f = adcStartTime + n/fs.
 // Because R(t) is linear inside a chirp the phase is a quadratic polynomial in n,
 // so we evaluate it with a 2nd-order phasor recurrence (fast mode) or with direct
@@ -149,7 +149,8 @@ export class Synthesizer {
       bases = this.bases;
     for (let r = 0; r < nRx; r++) {
       const k = tx * nRx + r;
-      let ph = d.virtPos[k] * u + d.virtPosZ[k] * uz + phase0 / TWO_PI;
+      // brief rev. 1: spatial term is negative (element at +x is closer to a target at θ > 0)
+      let ph = -(d.virtPos[k] * u + d.virtPosZ[k] * uz) + phase0 / TWO_PI;
       ph -= Math.floor(ph);
       cr[r] = A * Math.cos(TWO_PI * ph);
       ci[r] = A * Math.sin(TWO_PI * ph);

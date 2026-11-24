@@ -214,7 +214,8 @@ export class Detector {
       // fftshift: unshifted bin b ↔ shifted (b + A/2) mod A
       let sb = ((bi + A / 2) % A) + off;
       det.angleBin = sb;
-      const sinT = Math.max(-1, Math.min(1, (sb - A / 2) / (A * d.arraySpacing)));
+      // negative spatial phase (brief rev. 1) → target at θ > 0 lands at bins below A/2
+      const sinT = Math.max(-1, Math.min(1, -(sb - A / 2) / (A * d.arraySpacing)));
       const th = Math.asin(sinT);
       det.angleDeg = (th * 180) / Math.PI;
       det.x = det.range * Math.sin(th);

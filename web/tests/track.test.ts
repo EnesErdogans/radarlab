@@ -82,7 +82,7 @@ describe('micro-Doppler', () => {
     const drone = { ...defaultTarget('drone', 1), x: 0, y: 20, z: 2, vx: 0, vy: -3, rcs: 0.5, rpm };
     const e = new Engine(p.cfg, { ...defaultSettings(), ...p.settings, snrRefDb: 25 }, [drone]);
     e.selectedId = 1;
-    for (let i = 0; i < 6; i++) e.runFrame(undefined, false);
+    for (let i = 0; i < 6; i++) e.runFrame(undefined, false, true);
     return e.spec.spreadBins(25);
   }
   it('rotor blades spread the Doppler spectrum (6000 rpm vs 0 rpm)', () => {
@@ -96,7 +96,7 @@ describe('micro-Doppler', () => {
     const drone = { ...defaultTarget('drone', 1), x: 0, y: 20, z: 0, vx: 0, vy: -3, rcs: 2, rpm: 6000 };
     const e = new Engine(p.cfg, { ...defaultSettings(), ...p.settings, snrRefDb: 30 }, [drone]);
     e.selectedId = 1;
-    for (let i = 0; i < 6; i++) e.runFrame(undefined, false);
+    for (let i = 0; i < 6; i++) e.runFrame(undefined, false, true);
     const sp: Spectrogram = e.spec;
     const vPerBin = e.d.lambda / (2 * sp.nfft * e.d.te);
     const extent = (sp.spreadBins(35) * vPerBin) / 2;

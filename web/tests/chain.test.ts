@@ -130,8 +130,8 @@ describe('angle estimation (TDM-MIMO)', () => {
       const m = e.runFrame();
       const best = m.detections.reduce((a, b) => (b.power > a.power ? b : a));
       expect(Math.abs(best.angleDeg - az)).toBeLessThan(1.0);
-      // positive angle ↔ positive (fftshifted) angle bin
-      if (az !== 0) expect(Math.sign(best.angleBin - 32)).toBe(Math.sign(az));
+      // rev. 1 negative spatial phase: positive angle ↔ angle bin below A/2
+      if (az !== 0) expect(Math.sign(32 - best.angleBin)).toBe(Math.sign(az));
       if (Math.abs(v) > 5) {
         // without TDM Doppler compensation the estimate is biased
         e.det.dets[0].velocity = 0;
