@@ -44,7 +44,7 @@ export function scattererCount(t: Target): number {
     case 'point':
       return 1;
     case 'car':
-      return 13;
+      return 11;
     case 'pedestrian':
       return 6;
     case 'drone':
@@ -115,10 +115,13 @@ export function evalTarget(tg: Target, t: number, out: Float64Array, off: number
         const [a, b, c, w] = CAR_BODY[i];
         put(bx + a * fx + b * rx, by + a * fy + b * ry, bz + c, tg.vx, tg.vy, tg.vz, tg.rcs * w, i * 1.7);
       }
-      // rolling wheels: rim scatterer rotates in the (forward, up) plane
+      // rolling wheels on the side facing the radar (far-side wheels are shadowed by the body);
+      // rim scatterer rotates in the (forward, up) plane
       const om = speedH / WHEEL_R;
+      const side = bx * rx + by * ry > 0 ? -1 : 1; // lateral sign pointing toward the radar
       for (let i = 0; i < CAR_WHEELS.length; i++) {
         const [a, b] = CAR_WHEELS[i];
+        if (Math.sign(b) !== side) continue;
         const ang = -om * tm + i * 1.3;
         const ca = Math.cos(ang),
           sa = Math.sin(ang);

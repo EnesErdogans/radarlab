@@ -61,7 +61,33 @@ export class FFT {
     const cs = this.cos;
     const sn = this.sin;
     const sgn = inv ? -1 : 1;
-    for (let size = 2; size <= n; size <<= 1) {
+    let first = 2;
+    if (n >= 4) {
+      // fused size-2 and size-4 stages (twiddles 1 and ∓j: no multiplications)
+      for (let s0 = off; s0 < off + n; s0 += 4) {
+        const ar = re[s0] + re[s0 + 1],
+          ai = im[s0] + im[s0 + 1];
+        const br = re[s0] - re[s0 + 1],
+          bi = im[s0] - im[s0 + 1];
+        const cr = re[s0 + 2] + re[s0 + 3],
+          ci = im[s0 + 2] + im[s0 + 3];
+        const dr = re[s0 + 2] - re[s0 + 3],
+          di = im[s0 + 2] - im[s0 + 3];
+        // d·w, w = exp(∓jπ/2): forward → (di, −dr), inverse → (−di, dr)
+        const er = sgn * di,
+          ei = -sgn * dr;
+        re[s0] = ar + cr;
+        im[s0] = ai + ci;
+        re[s0 + 2] = ar - cr;
+        im[s0 + 2] = ai - ci;
+        re[s0 + 1] = br + er;
+        im[s0 + 1] = bi + ei;
+        re[s0 + 3] = br - er;
+        im[s0 + 3] = bi - ei;
+      }
+      first = 8;
+    }
+    for (let size = first; size <= n; size <<= 1) {
       const halfSize = size >> 1;
       const step = n / size;
       for (let start = 0; start < n; start += size) {

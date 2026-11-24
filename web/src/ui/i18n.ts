@@ -115,6 +115,7 @@ const en: Dict = {
   next: 'Next',
   close: 'Close',
   detsN: '{n} detections',
+  microParts: 'max |v_r| of parts ≈ {v} m/s',
 };
 
 const tr: Dict = {
@@ -230,6 +231,7 @@ const tr: Dict = {
   next: 'İleri',
   close: 'Kapat',
   detsN: '{n} tespit',
+  microParts: 'parçaların azami |v_r| ≈ {v} m/s',
 };
 
 const dicts: Record<Lang, Dict> = { en, tr };
@@ -315,11 +317,11 @@ export const LEARN: LearnStep[] = [
       en: `<p>A <b>constant false-alarm rate</b> detector estimates the local noise from N training cells around each cell under test (guard cells excluded) and declares a detection if P &gt; α·noise:</p>
 <div class="eq">CA: α = N·(P<sub>fa</sub><sup>−1/N</sup> − 1)</div>
 <div class="eq">OS: P<sub>fa</sub> = Π<sub>i=0..k−1</sub> (N−i)/(N−i+α),&nbsp; k = round(rank·N)</div>
-<p>GO/SO take the greater/smaller mean of the leading and lagging halves. This cut shows power along range at one Doppler bin with all four thresholds: CA is masked by a strong neighbour, OS is robust to it. Analytic α assumes exponential noise (K = 1); summing K channels makes it Gamma(K), so the real P<sub>fa</sub> is lower.</p>`,
+<p>GO/SO take the greater/smaller mean of the leading and lagging halves. This cut shows power along range at one Doppler bin with all four thresholds: CA is masked by a strong neighbour, OS is robust to it. Summing K channels makes the noise Gamma(K): CA uses the exact Gamma(K) α (hence its lower threshold here), while GO/SO/OS use the single-channel formulas and are therefore conservative.</p>`,
       tr: `<p><b>Sabit yanlış alarm oranlı</b> (CFAR) dedektör, test edilen her hücrenin çevresindeki N eğitim hücresinden (koruma hücreleri hariç) yerel gürültüyü kestirir ve P &gt; α·gürültü ise tespit bildirir:</p>
 <div class="eq">CA: α = N·(P<sub>fa</sub><sup>−1/N</sup> − 1)</div>
 <div class="eq">OS: P<sub>fa</sub> = Π<sub>i=0..k−1</sub> (N−i)/(N−i+α),&nbsp; k = round(rank·N)</div>
-<p>GO/SO, öncü ve artçı yarıların büyük/küçük ortalamasını alır. Bu kesit bir Doppler hücresinde menzil boyunca gücü ve dört eşiği gösterir: CA güçlü bir komşu tarafından maskelenir, OS buna dayanıklıdır. Analitik α üstel gürültü (K = 1) varsayar; K kanal toplanınca gürültü Gamma(K) olur ve gerçek P<sub>fa</sub> daha düşüktür.</p>`,
+<p>GO/SO, öncü ve artçı yarıların büyük/küçük ortalamasını alır. Bu kesit bir Doppler hücresinde menzil boyunca gücü ve dört eşiği gösterir: CA güçlü bir komşu tarafından maskelenir, OS buna dayanıklıdır. K kanal toplanınca gürültü Gamma(K) olur: CA tam Gamma(K) α’sını kullanır (bu yüzden eşiği burada daha düşüktür); GO/SO/OS tek kanal formüllerini kullandığından ihtiyatlıdır.</p>`,
     },
   },
   {

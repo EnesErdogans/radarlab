@@ -847,7 +847,7 @@ export class MicroPanel extends CanvasPanel {
     c.textAlign = 'left';
     c.textBaseline = 'middle';
     if (tr) {
-      const extra = tr.maxMicro > 0.1 ? ` · max |v_r| parts ≈ ${tr.maxMicro.toFixed(1)} m/s` : '';
+      const extra = tr.maxMicro > 0.1 ? ` · ${t('microParts', { v: tr.maxMicro.toFixed(1) })}` : '';
       c.fillText(`${t('selected')}: ${typeName(tr)} · R = ${tr.range.toFixed(1)} m${extra}`, rect.x, 11);
     } else c.fillText(t('noSel'), rect.x, 11);
   }
