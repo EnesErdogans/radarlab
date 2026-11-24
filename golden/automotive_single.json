@@ -1,5 +1,6 @@
 {
  "name": "automotive_single",
+ "goldenSet": 2,
  "conventionVersion": 2,
  "description": "automotive_77ghz preset, single point target",
  "config": {
@@ -9,16 +10,8 @@
   "nSamples": 256,
   "chirpPeriod": 3.2e-05,
   "nChirps": 128,
-  "txPos": [
-   0.0,
-   2.0
-  ],
-  "rxPos": [
-   0.0,
-   0.5,
-   1.0,
-   1.5
-  ],
+  "txPos": [0.0,2.0],
+  "rxPos": [0.0,0.5,1.0,1.5],
   "adcStartTime": 2e-06,
   "idleTime": 3e-06,
   "framePeriod": 0.05,
@@ -93,10 +86,7 @@
  ],
  "rdPowerDb": {
   "maxDb": 5.256636205545022,
-  "maxCell": [
-   95,
-   37
-  ],
+  "maxCell": [95,37],
   "meanDb": -35.4578649668881
  },
  "expected": {
@@ -114,11 +104,19 @@
     "angleDegNoTdmComp": 14.36903048607147,
     "angleBinNoTdmComp": 40,
     "powerDb": 5.256636205545022,
+    "azimuthDeg": 11.99819494546181,
+    "elevationDeg": 0.0,
+    "xyz": [7.7425871359541665,36.43165221869017,0.0],
     "truth": {
      "range": 37.2737856,
      "velocity": -6.4,
      "velocityAliased": -6.4,
      "angleDeg": 12.000000000000002,
+     "rangeBeat": 37.24083754666666,
+     "velocityEffective": -6.418451948051949,
+     "angleDegFft": 12.000000000000002,
+     "elevationDeg": 0.0,
+     "xyz": [7.74965578727465,36.45926395490627,0.0],
      "rangeBinAnalytic": 95.48694964434361,
      "dopplerBinAnalytic": 37.06791753913969,
      "angleBinAnalytic": 38.6531741061683
@@ -134,8 +132,14 @@
   "rangeAbs": 1e-06,
   "velocityAbs": 1e-06,
   "angleDegAbs": 0.0001,
-  "truthRangeAbs": 0.19517738151041666,
-  "truthVelocityAbs": 0.11881739945845171,
-  "truthAngleDegAbs": 2.0
+  "truthRangeBeatAbs": 0.011710642890625,
+  "truthVelocityEffectiveAbs": 0.007129043967507102,
+  "truthAngleFftDegAbs": 0.05,
+  "truthAzimuthDegAbs": 0.05,
+  "truthElevationDegAbs": 0.05,
+  "truthRangeAbs": 0.04465869622396028,
+  "truthVelocityAbs": 0.025580992019455823,
+  "truthAngleDegAbs": 0.05,
+  "toleranceNotes": "truth*Abs = interpolation bias (0.03 bin, 0.05 deg) + largest deterministic offset in this case (range-Doppler coupling, carrier scaling, cos(phi) projection of the 1-D azimuth FFT). angleDeg is compared with truth.angleDeg only when the velocity is not aliased."
  }
 }

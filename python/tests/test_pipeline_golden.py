@@ -57,12 +57,62 @@ def test_golden_files_up_to_date(name):
     cmp(stored, fresh)
 
 
-def test_golden_peaks_match_truth():
-    for name in ("tiny_cube", "automotive_single", "automotive_multi", "awr1843_elevated"):
-        case = golden.ALL_CASES[name]()
-        tol = case["tolerances"]
-        for pk in case["expected"]["peaks"]:
-            t = pk["truth"]
-            assert abs(pk["range"] - t["range"]) < tol["truthRangeAbs"]
-            assert abs(pk["velocity"] - t["velocityAliased"]) < tol["truthVelocityAbs"]
-            assert abs(pk["angleDeg"] - t["angleDeg"]) < tol["truthAngleDegAbs"]
+SCENARIOS = ("tiny_cube", "automotive_single", "automotive_multi", "awr1843_elevated",
+             "tiny_mti", "tiny_real_iq", "tiny_physical")
+
+
+@pytest.mark.parametrize("name", SCENARIOS)
+def test_golden_peaks_match_truth(name):
+    case = golden.ALL_CASES[name]()
+    tol = case["tolerances"]
+    assert tol["truthAngleFftDegAbs"] <= 0.05 and tol["truthRangeBeatAbs"] <= 0.03 * case["derived"]["rangeResolution"]
+    for pk in case["expected"]["peaks"]:
+        t = pk["truth"]
+        # observable truth: only interpolation bias allowed
+        assert abs(pk["range"] - t["rangeBeat"]) < tol["truthRangeBeatAbs"]
+        assert abs(pk["velocity"] - t["velocityEffective"]) < tol["truthVelocityEffectiveAbs"]
+        assert abs(pk["angleDeg"] - t["angleDegFft"]) < tol["truthAngleFftDegAbs"]
+        assert abs(pk["azimuthDeg"] - t["angleDeg"]) < tol["truthAzimuthDegAbs"]
+        if name == "awr1843_elevated":
+            assert abs(pk["elevationDeg"] - t["elevationDeg"]) < tol["truthElevationDegAbs"]
+        # geometric truth with the documented deterministic offsets
+        assert abs(pk["range"] - t["range"]) < tol["truthRangeAbs"]
+        assert abs(pk["velocity"] - t["velocityAliased"]) < tol["truthVelocityAbs"]
+        assert abs(pk["angleDeg"] - t["angleDeg"]) < tol["truthAngleDegAbs"]
+
+
+def test_golden_mti_removes_static():
+    case = golden.ALL_CASES["tiny_mti"]()
+    rd = np.array(case["rdPowerDb"]["data"]).reshape(case["rdPowerDb"]["shape"])
+    M = case["config"]["nChirps"]
+    # the static scatterer (rcs 20, ~13 dB above the mover) is gone: only the mover's
+    # Hann Doppler sidelobes (> 30 dB down) remain in the zero-Doppler column
+    assert rd[:, M // 2].max() < rd.max() - 30
+    assert len(case["expected"]["peaks"]) == 1
+
+
+def test_golden_cfar_maps_reproducible_from_stored_input():
+    case = golden.ALL_CASES["cfar_maps"]()
+    shape = tuple(case["shape"])
+    for m in case["maps"]:
+        P = np.array(m["P"]).reshape(shape)
+        for kind in ("ca", "go", "so", "os"):
+            r = rl.dsp.cfar_2d(P, tuple(case["guard"]), tuple(case["train"]), case["pfa"], kind,
+                               case["osRank"], n_channels=m["K"])
+            np.testing.assert_allclose(r.threshold.ravel(), m[kind]["threshold"], rtol=1e-12)
+            assert np.argwhere(r.mask).tolist() == m[kind]["detections"]
+        # range edges and GO/SO fallback are exercised
+        assert min(m["nTrain"]) < max(m["nTrain"])
+        assert len(m["go"]["caFallbackCells"]) > 0
+    # the K = 8 masks discriminate between CFAR kinds
+    k8 = case["maps"][1]
+    assert len({tuple(map(tuple, k8[k]["detections"])) for k in ("ca", "so", "os")}) == 3
+
+
+def test_golden_clustering_and_tracker():
+    cl = golden.ALL_CASES["clustering"]()["clusters"]
+    sizes = sorted(c["size"] for c in cl)
+    assert sizes == [1, 1, 2, 2, 4, 5]          # seam merge (4), L (5), diagonals (2, 2)
+    tr = golden.ALL_CASES["tracker"]()
+    last = tr["frames"][-1]["tracks"]
+    assert [t["status"] for t in last] == ["confirmed", "confirmed"]   # clutter track deleted

@@ -1,5 +1,6 @@
 {
  "name": "automotive_velocity_alias",
+ "goldenSet": 2,
  "conventionVersion": 2,
  "description": "target at vr = vmax + 3.3 dv = 15.9928 m/s appears aliased at negative velocity (TDM compensation with aliased v gives a biased angle; see angleDeg)",
  "config": {
@@ -9,16 +10,8 @@
   "nSamples": 256,
   "chirpPeriod": 3.2e-05,
   "nChirps": 128,
-  "txPos": [
-   0.0,
-   2.0
-  ],
-  "rxPos": [
-   0.0,
-   0.5,
-   1.0,
-   1.5
-  ],
+  "txPos": [0.0,2.0],
+  "rxPos": [0.0,0.5,1.0,1.5],
   "adcStartTime": 2e-06,
   "idleTime": 3e-06,
   "framePeriod": 0.05,
@@ -93,10 +86,7 @@
  ],
  "rdPowerDb": {
   "maxDb": 10.659721599011737,
-  "maxCell": [
-   64,
-   3
-  ],
+  "maxCell": [64,3],
   "meanDb": -28.56498735984895
  },
  "expected": {
@@ -114,11 +104,19 @@
     "angleDegNoTdmComp": -15.895341542518539,
     "angleBinNoTdmComp": 23,
     "powerDb": 10.659721599011737,
+    "azimuthDeg": -21.20778416060818,
+    "elevationDeg": 0.0,
+    "xyz": [-9.09881849046071,23.448705072580637,0.0],
     "truth": {
      "range": 25.065506598777272,
      "velocity": 15.992821967107599,
      "velocityAliased": -14.42443229425604,
      "angleDeg": -10.0,
+     "rangeBeat": 25.147839778640204,
+     "velocityEffective": -14.37832311923399,
+     "angleDegFft": -10.0,
+     "elevationDeg": 0.0,
+     "xyz": [-4.35257954317609,24.68470523165452,0.0],
      "rangeBinAnalytic": 64.21211926505818,
      "dopplerBinAnalytic": 3.29999999999999,
      "angleBinAnalytic": 26.44325831465823
@@ -134,8 +132,14 @@
   "rangeAbs": 1e-06,
   "velocityAbs": 1e-06,
   "angleDegAbs": 0.0001,
-  "truthRangeAbs": 0.19517738151041666,
-  "truthVelocityAbs": 0.11881739945845171,
-  "truthAngleDegAbs": 2.0
+  "truthRangeBeatAbs": 0.011710642890625,
+  "truthVelocityEffectiveAbs": 0.007129043967507102,
+  "truthAngleFftDegAbs": 0.05,
+  "truthAzimuthDegAbs": 0.05,
+  "truthElevationDegAbs": 0.05,
+  "truthRangeAbs": 0.09404382275355687,
+  "truthVelocityAbs": 0.0532382189895568,
+  "truthAngleDegAbs": 0.05,
+  "toleranceNotes": "truth*Abs = interpolation bias (0.03 bin, 0.05 deg) + largest deterministic offset in this case (range-Doppler coupling, carrier scaling, cos(phi) projection of the 1-D azimuth FFT). angleDeg is compared with truth.angleDeg only when the velocity is not aliased."
  }
 }

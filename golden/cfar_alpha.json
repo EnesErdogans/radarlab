@@ -1,5 +1,6 @@
 {
  "name": "cfar_alpha",
+ "goldenSet": 2,
  "conventionVersion": 2,
  "description": "CFAR threshold multipliers for K non-coherently summed channels (noise Gamma(K), exact). CA and GO/SO multiply the mean of the training cells (GO/SO: of a half with n/2 cells); OS multiplies the k-th smallest, k = round(0.75 n) (round-half-even). K=1: closed forms; K>1: CA via betaincinv, OS/GO/SO via adaptive quadrature of the exact Gamma order-statistic / half-sum integrals (rel. accuracy ~1e-9).",
  "osRank": 0.75,
