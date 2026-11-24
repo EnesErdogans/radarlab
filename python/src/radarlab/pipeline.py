@@ -78,7 +78,9 @@ def process_frame(cube: np.ndarray, cfg: RadarConfig, params: ProcessingParams |
                   t: float = 0.0) -> FrameResult:
     """Run the full chain on one ADC cube (K, M, N)."""
     p = params or ProcessingParams()
-    rf = dsp.range_fft(cube, p.range_window)
+    # real-IF captures keep only the N/2 non-negative beat bins, decided by the
+    # config (not by the dtype: a real capture cast to complex must still be real-IF)
+    rf = dsp.range_fft(cube, p.range_window, real_input=(cfg.iq_mode == "real"))
     if p.mti:
         rf = dsp.mti(rf, axis=-2, kind=p.mti)
     rd = dsp.doppler_fft(rf, p.doppler_window)

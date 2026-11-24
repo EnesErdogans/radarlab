@@ -62,8 +62,15 @@ def crlb_velocity(cfg: RadarConfig, snr_db: float, dims: tuple[int, int, int] | 
 
 def crlb_angle(cfg: RadarConfig, snr_db: float, theta: float = 0.0,
                dims: tuple[int, int, int] | None = None, positions: np.ndarray | None = None) -> float:
-    """CRLB standard deviation of azimuth [rad] for an arbitrary linear array
-    (positions in wavelengths, default the virtual array)."""
+    """CRLB standard deviation of azimuth [rad] for a linear array (positions in
+    wavelengths, default the virtual array), assuming the angle is decoupled
+    from range and velocity (single-snapshot-per-element phase model with a
+    known or compensated Doppler).
+
+    For TDM-MIMO with an *unknown* velocity the TX-slot Doppler phase
+    2π·(2v/λ)·t·Tc couples v and θ, so the full Fisher matrix is not
+    block-diagonal and this bound is optimistic for that case (review m4). It is
+    exact for SIMO / simultaneous-TX arrays and for the V3 set-up."""
     K, M, N = _dims(cfg, dims)
     x = cfg.virtual_pos if positions is None else np.asarray(positions, float)
     eta = 10 ** (snr_db / 10)

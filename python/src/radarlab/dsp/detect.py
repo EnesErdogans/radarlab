@@ -20,11 +20,16 @@ def parabolic_offset(ym: np.ndarray | float, y0: np.ndarray | float,
     """Vertex offset δ ∈ [−½, ½] of the parabola through (−1, ym), (0, y0), (1, yp)::
 
         δ = ½·(ym − yp) / (ym − 2·y0 + yp)
+
+    If the parabola is not concave (den ≥ 0, i.e. the centre sample is not a
+    peak of the fit) or den is not finite, δ = 0. This is the same rule as the
+    web engine (``parabolic`` in ``web/src/dsp/detect.ts``).
     """
     ym, y0, yp = (np.asarray(v, float) for v in (ym, y0, yp))
     den = ym - 2 * y0 + yp
+    ok = (den < 0) & np.isfinite(den)
     with np.errstate(divide="ignore", invalid="ignore"):
-        d = np.where(np.abs(den) > 1e-300, 0.5 * (ym - yp) / den, 0.0)
+        d = np.where(ok, 0.5 * (ym - yp) / np.where(ok, den, -1.0), 0.0)
     return np.clip(d, -0.5, 0.5)
 
 

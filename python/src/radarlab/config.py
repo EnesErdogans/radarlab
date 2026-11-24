@@ -336,7 +336,7 @@ def awr1843_like() -> RadarConfig:
 def drone_24ghz() -> RadarConfig:
     """24 GHz surveillance radar: ΔR ≈ 1 m (B_eff = 150 MHz), Rmax ≈ 512 m.
 
-    2TX × 4RX (8 virtual ULA), vmax ≈ 25.9 m/s, Δv ≈ 0.40 m/s.
+    2TX × 4RX (8 virtual ULA), vmax ≈ 26.0 m/s, Δv ≈ 0.41 m/s.
     """
     n, fs = 512, 10e6
     slope = 150e6 / (n / fs)

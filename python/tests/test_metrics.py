@@ -73,3 +73,25 @@ def test_empirical_helpers():
     ex[1, 1] = True
     assert metrics.empirical_pfa(m, ex) == pytest.approx(1 / 99)
     assert metrics.empirical_pd(np.stack([m, ~m]), [[1, 1]]) == 0.5
+
+
+def test_pd_ca_cfar_swerling1_monte_carlo():
+    """Review m3/m15: closed-form CA-CFAR Pd (Swerling 1, K = 1) vs the 2-D CFAR
+    on exponential noise with exponentially distributed target cells."""
+    import numpy as np
+    from radarlab import dsp, metrics
+    rng = np.random.default_rng(11)
+    pfa, chi = 1e-3, 10.0                      # 10 dB mean SNR
+    guard, train = (1, 1), (4, 3)              # N = 54 training cells
+    hits = trials = 0
+    for _ in range(60):
+        P = rng.exponential(1.0, (64, 64))
+        rr, dd = np.meshgrid(np.arange(6, 58, 11), np.arange(4, 64, 8), indexing="ij")
+        P[rr, dd] = rng.exponential(1.0 + chi, rr.shape)
+        m = dsp.cfar_2d(P, guard, train, pfa, "ca").mask
+        hits += int(m[rr, dd].sum())
+        trials += rr.size
+    pd_sim = hits / trials
+    pd_th = float(metrics.pd_ca_cfar_swerling1(chi, pfa, 54))
+    lo, hi = metrics.binomial_ci(pd_sim, trials, z=3.29)
+    assert lo <= pd_th <= hi, (pd_sim, pd_th, trials)

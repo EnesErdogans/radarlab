@@ -155,3 +155,14 @@ def test_range_angle_map():
     r, a = _peak(ra)
     assert abs(r * cfg.range_resolution - 25.0) < 1.0
     assert dsp.angle_bin_to_deg(a, 64, 0.5) == pytest.approx(-20.0, abs=2.5)
+
+
+def test_process_frame_real_if_from_config_not_dtype():
+    """Review m14: a real-IF capture cast to complex keeps N/2 range bins."""
+    import radarlab as rl
+    cfg = rl.awr1843_like().replace(iq_mode="real")
+    cube = rl.synthesize_cube(cfg, [rl.PointTarget.from_polar(5.0, 0.0, 0.0)], noise=False)
+    a = rl.process_frame(cube, cfg)
+    b = rl.process_frame(cube.astype(complex), cfg)
+    assert a.power.shape == b.power.shape == (cfg.n_samples // 2, cfg.n_chirps)
+    np.testing.assert_allclose(a.power, b.power)

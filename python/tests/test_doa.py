@@ -31,8 +31,23 @@ def test_elevation_awr1843():
     res = rl.process_frame(rl.synthesize_cube(cfg, [tg], noise=False), cfg)
     p = res.points[0]
     assert np.rad2deg(p["elevation"]) == pytest.approx(12.0, abs=0.5)
-    # azimuth FFT measures sinθ·cosφ
-    assert np.sin(p["azimuth"]) == pytest.approx(np.sin(np.deg2rad(15)) * np.cos(np.deg2rad(12)), abs=0.01)
+    # the azimuth FFT measures u_x = sinθ·cosφ; the point cloud must undo the cosφ
+    assert np.rad2deg(p["azimuth"]) == pytest.approx(15.0, abs=0.05)
+
+
+@pytest.mark.parametrize("el_deg", [0.0, 12.0, 30.0])
+def test_pointcloud_xyz_with_elevation(el_deg):
+    """Review M1: x/y/z and θ = atan2(x, y) are correct for φ ≠ 0 (R = 10 m, θ = 15°)."""
+    cfg = rl.awr1843_like()
+    tg = rl.PointTarget.from_polar(10.0, 15.0, 0.0, elevation_deg=el_deg)
+    res = rl.process_frame(rl.synthesize_cube(cfg, [tg], noise=False), cfg)
+    p = res.points[0]
+    th, ph = np.deg2rad(15.0), np.deg2rad(el_deg)
+    truth = 10.0 * np.array([np.sin(th) * np.cos(ph), np.cos(th) * np.cos(ph), np.sin(ph)])
+    est = np.array([p["x"], p["y"], p["z"]])
+    assert np.linalg.norm(est - truth) < 0.03  # < 3 cm at 10 m (range-bin interpolation)
+    assert np.rad2deg(p["azimuth"]) == pytest.approx(15.0, abs=0.05)
+    assert np.rad2deg(p["elevation"]) == pytest.approx(el_deg, abs=0.3)
 
 
 def test_tdm_phase_values():

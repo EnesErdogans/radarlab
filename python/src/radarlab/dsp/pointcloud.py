@@ -3,9 +3,16 @@
 For each detection (integer RD cell + fractional refinement):
     range    = r_frac · ΔR            (ΔR scaled by N/Nfft for zero-padded FFTs)
     velocity = (d_frac − Md/2) · Δv
-    azimuth  : TDM-compensate X[:, r, d] with ``velocity``, zero-padded angle FFT
-               over the azimuth ULA, parabolic refinement, θ = asin(sinθ)
-    elevation: from same-x / different-z virtual pairs when available, else 0
+    u_x      : TDM-compensate X[:, r, d] with ``velocity``, zero-padded angle FFT
+               over the azimuth ULA, parabolic refinement. The azimuth ULA
+               measures the direction cosine u_x = sinθ·cosφ (not sinθ).
+    elevation: φ from same-x / different-z virtual pairs when available, else 0
+               (u_z = sinφ)
+    x, y, z  : x = R·u_x, z = R·u_z, y = R·√(1 − u_x² − u_z²)
+    azimuth  : θ = atan2(x, y) (brief convention). For φ = 0 this equals
+               asin(u_x). Without an elevation estimate (planar arrays) φ is
+               taken as 0, so a target with z ≠ 0 is reported at
+               asin(sinθ·cosφ) — a bias of up to 0.3° at φ = 10°, 2° at φ = 30°.
     snr_db   = 10·log10(P[r, d] / noise[r, d])  (noise = CFAR statistic)
 """
 from __future__ import annotations
@@ -66,15 +73,15 @@ def point_cloud(rd: np.ndarray, P: np.ndarray, cells: np.ndarray, cfg: RadarConf
         af, a, th = estimate_azimuth(x, cfg, n_angle_fft, angle_window)
         el = estimate_elevation(x, cfg) if np.any(cfg.virtual_pos_z != cfg.virtual_pos_z[0]) else 0.0
         el = 0.0 if np.isnan(el) else el
-        out[i]["azimuth"], out[i]["elevation"] = th, el
+        ux, uz = np.sin(th), np.sin(el)          # direction cosines along x and z
+        uy = np.sqrt(max(1.0 - ux * ux - uz * uz, 0.0))
+        out[i]["x"], out[i]["y"], out[i]["z"] = rng[i] * ux, rng[i] * uy, rng[i] * uz
+        out[i]["azimuth"] = np.arctan2(ux, uy)    # θ = atan2(x, y)
+        out[i]["elevation"] = el
         out[i]["angle_bin"], out[i]["angle_cell"] = af, a
     out["range"], out["velocity"] = rng, vel
     out["range_bin"], out["doppler_bin"] = rf, df
     out["range_cell"], out["doppler_cell"] = cells[:, 0], cells[:, 1]
-    ce = np.cos(out["elevation"])
-    out["x"] = rng * np.sin(out["azimuth"]) * ce
-    out["y"] = rng * np.cos(out["azimuth"]) * ce
-    out["z"] = rng * np.sin(out["elevation"])
     pw = P[cells[:, 0], cells[:, 1]]
     out["power_db"] = 10 * np.log10(np.maximum(pw, 1e-300))
     if noise is not None:

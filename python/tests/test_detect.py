@@ -31,3 +31,11 @@ def test_local_maxima():
     P[7, 0] = 3
     pk = dsp.local_maxima(P, P > 0.5)
     assert {tuple(p) for p in pk} == {(3, 4), (7, 0)}
+
+
+def test_parabolic_offset_non_peak_is_zero():
+    """Review m16: same rule as the web engine — no concave fit → offset 0."""
+    from radarlab.dsp import parabolic_offset
+    assert parabolic_offset(1.0, 0.0, 1.0) == 0.0          # centre is a minimum
+    assert parabolic_offset(0.0, 1.0, 2.0) == 0.0          # linear (den = 0)
+    assert parabolic_offset(0.0, 2.0, 1.0) == pytest.approx(0.5 * (0 - 1) / (0 - 4 + 1))
