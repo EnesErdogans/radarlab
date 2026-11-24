@@ -309,7 +309,7 @@ All checks pass. On the Python side (V10), the stored files are identical to a f
 | V1 | Noise + CFAR false-alarm rate, rect windows, fixed/CA/OS/GO/SO, K = 1 and 8, design Pfa = 1e-4 | \|log10(Pfa_sim/Pfa)\| < 0.1 | Largest \|log10 ratio\| 0.034 (OS, K = 8); 3,006,464 cells per case | PASS |
 | V1c | CFAR Pfa with Hann windows (documented effect) | adjacent-cell correlation −2/3 ± 0.05 | Correlation −0.6725; Pfa ratio 1.61 (CA) and 1.57 (OS) at design 1e-3, vs 1.01 and 1.03 with rect | PASS |
 | V2 | Pd vs SNR, Swerling 0/1/3, K = 1 and 8 | theory inside the 95 % CI (verdict on 99.9 % CI) | 29 of 30 points inside the 95 % CI; 3000 trials per point | PASS |
-| V3 | RMSE vs CRLB for range, velocity, angle | efficiency CRLB/MSE ≥ 0.9 above threshold | Efficiency 0.957–1.041 for per-sample SNR from −12 dB to +6 dB | PASS |
+| V3 | RMSE vs CRLB for range, velocity, angle | efficiency CRLB/MSE ≥ 0.9 above threshold | Efficiency 0.956–1.041 for per-sample SNR from −12 dB to +6 dB | PASS |
 | V4 | Phase noise, range-correlated residual (τ = 0.68 µs) | variance within ±2 %; PSD within ±0.5 dB at fτ = ½ | Variance error −0.95 %; PSD deviation −0.025 dB | PASS |
 | V5 | Two-ray ground multipath | null positions within ±1 range bin | Five nulls (15.4–77.1 m), largest error 0.19 m with a 0.39 m bin | PASS |
 | V6 | IQ imbalance image | image level = −IMRR ± 0.5 dB | IMRR 28.93 dB, image −28.93 dBc | PASS |
@@ -599,7 +599,7 @@ RadarLab is released under the [MIT License](LICENSE). Copyright (c) 2026 Enes E
 
 [4] K. Bansal et al., "SHENRON – Scalable, High Fidelity and Efficient Radar Simulation", *IEEE Robotics and Automation Letters*, 2023. <https://github.com/Kshitizbansal/shenron-radar-simulator> (Author list, volume, pages unverified.)
 
-[5] Z. F. Magosi et al., "A Survey on Modelling of Automotive Radar Sensors for Virtual Test and Validation of Automated Driving", *Sensors*, vol. 22, no. 15, pp. 5693, 2022. doi:[10.3390/s22155693](https://doi.org/10.3390/s22155693).
+[5] Z. F. Magosi et al., "A Survey on Modelling of Automotive Radar Sensors for Virtual Test and Validation of Automated Driving", *Sensors*, vol. 22, no. 15, art. no. 5693, 2022. doi:[10.3390/s22155693](https://doi.org/10.3390/s22155693).
 
 [6] Z. Peng, "RadarSimPy: A Radar Simulator for Python (v8.3.0)", Zenodo, 2022. doi:[10.5281/zenodo.6792269](https://doi.org/10.5281/zenodo.6792269).
 

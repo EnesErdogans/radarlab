@@ -24,7 +24,7 @@ Tüm sayılar `python/examples/out/validation_report.md` dosyasından alınmış
 - **Yanlış alarm (V1):** Dikdörtgen pencereyle, sabit/CA/OS/GO/SO detektörleri için K = 1 ve K = 8'de benzetim Pfa değeri tasarım değerine çok yakındır (en büyük |log10 oran| 0.034).
 - **Hann penceresi (V1c):** Komşu gürültü hücreleri arasında −2/3 korelasyon oluşur (ölçülen −0.6725); CA-CFAR yanlış alarm oranı tasarım değerinin yaklaşık 1.6 katına çıkar.
 - **Tespit olasılığı (V2):** Swerling 0/1/3, K = 1 ve 8 için 30 noktanın 29'u teorinin %95 güven aralığı içindedir.
-- **CRLB (V3):** Eşik bölgesinin üstünde menzil, hız ve açı kestiricilerinin verimliliği 0.957–1.041 arasındadır.
+- **CRLB (V3):** Eşik bölgesinin üstünde menzil, hız ve açı kestiricilerinin verimliliği 0.956–1.041 arasındadır.
 - **Gamma(K) CFAR:** Tek kanal CA formülü K kanalın toplamına uygulanırsa eşik, K = 4–8 ve N = 16–32 eğitim hücresi için 4.1–6.1 dB fazla yüksek olur (`golden/cfar_alpha.json`, tasarım Pfa = 10⁻⁴).
 - **DCA1000 kapalı döngü (V11):** `.cfg` → benzetim → int16 `.bin` → okuma → işleme zincirinde kodlar birebir aynı kalır ve tespitler değişmez.
 - **Testler:** Python 114 hızlı + 7 yavaş (Monte-Carlo) test; web 79 test (Vitest). Hepsi geçiyor.
