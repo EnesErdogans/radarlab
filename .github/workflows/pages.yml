@@ -28,7 +28,11 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
-      - run: npm run build
+      # never deploy a build that fails its unit + golden-vector tests (review m11)
+      - name: Unit + golden-vector tests
+        run: npm test
+      - name: Type-check and build
+        run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
