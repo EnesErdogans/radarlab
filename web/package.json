@@ -1,0 +1,19 @@
+{
+  "name": "radarlab",
+  "version": "1.0.0",
+  "description": "Interactive in-browser FMCW radar simulator: range-Doppler, CFAR, MIMO angle, Kalman tracking and micro-Doppler.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "author": "Enes Erdoğan",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1"
+  },
+  "type": "module"
+}
