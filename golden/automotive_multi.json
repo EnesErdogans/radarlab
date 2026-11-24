@@ -1,0 +1,238 @@
+{
+ "name": "automotive_multi",
+ "description": "4 targets: static boresight, negative velocity at -30 deg, +25 deg receding, large |v| at +40 deg where TDM compensation matters (compare angleDegNoTdmComp)",
+ "config": {
+  "fc": 77000000000.0,
+  "slope": 15000000000000.0,
+  "fs": 10000000.0,
+  "nSamples": 256,
+  "chirpPeriod": 3.2e-05,
+  "nChirps": 128,
+  "txPos": [
+   0.0,
+   2.0
+  ],
+  "rxPos": [
+   0.0,
+   0.5,
+   1.0,
+   1.5
+  ],
+  "adcStartTime": 2e-06,
+  "idleTime": 3e-06,
+  "framePeriod": 0.05,
+  "iqMode": "complex",
+  "txPowerDbm": 12.0,
+  "txGainDbi": 10.0,
+  "rxGainDbi": 10.0,
+  "noiseFigureDb": 15.0,
+  "systemLossDb": 3.0,
+  "name": "automotive_77ghz"
+ },
+ "derived": {
+  "wavelength": 0.0038934085454545454,
+  "te": 6.4e-05,
+  "bandwidthEff": 384000000.0,
+  "rangeResolution": 0.39035476302083333,
+  "maxRange": 99.93081933333333,
+  "velocityResolution": 0.23763479891690342,
+  "maxVelocity": 15.208627130681819,
+  "nVirtual": 8.0,
+  "nRangeBins": 256.0,
+  "frameActiveTime": 0.008192
+ },
+ "scatterers": [
+  {
+   "x": 0.0,
+   "y": 20.0,
+   "z": 0.0,
+   "vx": 0.0,
+   "vy": 0.0,
+   "vz": 0.0,
+   "rcs": 1.0,
+   "phase0": 0.0
+  },
+  {
+   "x": -22.749999999999996,
+   "y": 39.404155872191964,
+   "z": 0.0,
+   "vx": 4.1499999999999995,
+   "vy": -7.188010851410842,
+   "vz": -0.0,
+   "rcs": 10.0,
+   "phase0": 0.0
+  },
+  {
+   "x": 26.286855880271506,
+   "y": 56.37234435367963,
+   "z": 0.0,
+   "vx": 4.944633662366183,
+   "vy": 10.603801108328804,
+   "vz": 0.0,
+   "rcs": 10.0,
+   "phase0": 0.0
+  },
+  {
+   "x": 19.540743334470793,
+   "y": 23.28775107081693,
+   "z": 0.0,
+   "vx": 8.934747774642895,
+   "vy": 10.648017759353795,
+   "vz": 0.0,
+   "rcs": 5.0,
+   "phase0": 0.0
+  }
+ ],
+ "amplitudeMode": "snr",
+ "snrRefDb": 20.0,
+ "refRange": 10.0,
+ "noise": false,
+ "tFrame": 0.0,
+ "processing": {
+  "rangeWindow": "hann",
+  "dopplerWindow": "hann",
+  "angleWindow": "rect",
+  "angleFftSize": 64,
+  "peakInterpolation": "parabolic-log-power",
+  "tdmCompensation": true
+ },
+ "cubeSamples": [
+  {
+   "k": 0,
+   "m": 0,
+   "n": 0,
+   "re": 0.043292133518034515,
+   "im": -2.017389547403788
+  },
+  {
+   "k": 7,
+   "m": 127,
+   "n": 255,
+   "re": -5.0674338961580805,
+   "im": -1.6855764663569859
+  },
+  {
+   "k": 4,
+   "m": 42,
+   "n": 51,
+   "re": 2.1199834646925018,
+   "im": -1.478986565025529
+  }
+ ],
+ "rdPowerDb": {
+  "maxDb": 16.678059103695436,
+  "maxCell": [
+   51,
+   64
+  ],
+  "meanDb": -20.82157436467744
+ },
+ "expected": {
+  "peaks": [
+   {
+    "rangeBin": 51,
+    "dopplerBin": 64,
+    "angleBin": 32,
+    "rangeBinFrac": 51.25061213143712,
+    "dopplerBinFrac": 64.0,
+    "angleBinFrac": 32.00000000000125,
+    "range": 20.005920553239783,
+    "velocity": 0.0,
+    "angleDeg": 2.2391104957503156e-12,
+    "angleDegNoTdmComp": 2.2391104957503156e-12,
+    "angleBinNoTdmComp": 32,
+    "powerDb": 16.678059103695436,
+    "truth": {
+     "range": 20.0,
+     "velocity": 0.0,
+     "velocityAliased": 0.0,
+     "angleDeg": 0.0,
+     "rangeBinAnalytic": 51.23544502243615,
+     "dopplerBinAnalytic": 64.0,
+     "angleBinAnalytic": 32.0
+    }
+   },
+   {
+    "rangeBin": 116,
+    "dopplerBin": 29,
+    "angleBin": 16,
+    "rangeBinFrac": 116.37775599594542,
+    "dopplerBinFrac": 28.971682277202554,
+    "angleBinFrac": 16.000104129127056,
+    "range": 45.42861136269364,
+    "velocity": -8.323947238454375,
+    "angleDeg": -29.99978471499626,
+    "angleDegNoTdmComp": -33.51290313691944,
+    "angleBinNoTdmComp": 14,
+    "powerDb": 11.968580081670734,
+    "truth": {
+     "range": 45.46600320000001,
+     "velocity": -8.3,
+     "velocityAliased": -8.3,
+     "angleDeg": -29.999999999999993,
+     "rangeBinAnalytic": 116.47354536717535,
+     "dopplerBinAnalytic": 29.07245555857179,
+     "angleBinAnalytic": 16.000000000000007
+    }
+   },
+   {
+    "rangeBin": 160,
+    "dopplerBin": 113,
+    "angleBin": 46,
+    "rangeBinFrac": 159.60677541312668,
+    "dopplerBinFrac": 113.38697102384533,
+    "angleBinFrac": 45.52285107716954,
+    "range": 62.303264992910435,
+    "velocity": 11.736062928366422,
+    "angleDeg": 24.998156198061267,
+    "angleDegNoTdmComp": 29.74198378090689,
+    "angleBinNoTdmComp": 48,
+    "powerDb": 5.6550399223673855,
+    "truth": {
+     "range": 62.2479232,
+     "velocity": 11.7,
+     "velocityAliased": 11.7,
+     "angleDeg": 25.000000000000004,
+     "rangeBinAnalytic": 159.4650023437214,
+     "dopplerBinAnalytic": 113.23521324876023,
+     "angleBinAnalytic": 45.523784375702384
+    }
+   },
+   {
+    "rangeBin": 78,
+    "dopplerBin": 123,
+    "angleBin": 53,
+    "rangeBinFrac": 78.2221497898915,
+    "dopplerBinFrac": 122.64430053719936,
+    "angleBinFrac": 52.569392397135815,
+    "range": 30.534388744213224,
+    "velocity": 13.93592656577982,
+    "angleDeg": 40.00044149170017,
+    "angleDegNoTdmComp": 46.88653400000604,
+    "angleBinNoTdmComp": 55,
+    "powerDb": 15.762067534896445,
+    "truth": {
+     "range": 30.456934399999998,
+     "velocity": 13.899999999999999,
+     "velocityAliased": 13.899999999999999,
+     "angleDeg": 40.0,
+     "rangeBinAnalytic": 78.02372940015722,
+     "dopplerBinAnalytic": 122.49311659468097,
+     "angleBinAnalytic": 52.569203509969256
+    }
+   }
+  ]
+ },
+ "tolerances": {
+  "cubeRelMax": 1e-09,
+  "rdPowerDbAbs": 1e-06,
+  "binFracAbs": 1e-06,
+  "integerBins": 0,
+  "rangeAbs": 1e-06,
+  "velocityAbs": 1e-06,
+  "angleDegAbs": 0.0001,
+  "truthRangeAbs": 0.19517738151041666,
+  "truthVelocityAbs": 0.11881739945845171,
+  "truthAngleDegAbs": 2.0
+ }
+}

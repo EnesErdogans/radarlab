@@ -1,0 +1,139 @@
+{
+ "name": "automotive_velocity_alias",
+ "description": "target at vr = vmax + 3.3 dv = 15.9928 m/s appears aliased at negative velocity (TDM compensation with aliased v gives a biased angle; see angleDeg)",
+ "config": {
+  "fc": 77000000000.0,
+  "slope": 15000000000000.0,
+  "fs": 10000000.0,
+  "nSamples": 256,
+  "chirpPeriod": 3.2e-05,
+  "nChirps": 128,
+  "txPos": [
+   0.0,
+   2.0
+  ],
+  "rxPos": [
+   0.0,
+   0.5,
+   1.0,
+   1.5
+  ],
+  "adcStartTime": 2e-06,
+  "idleTime": 3e-06,
+  "framePeriod": 0.05,
+  "iqMode": "complex",
+  "txPowerDbm": 12.0,
+  "txGainDbi": 10.0,
+  "rxGainDbi": 10.0,
+  "noiseFigureDb": 15.0,
+  "systemLossDb": 3.0,
+  "name": "automotive_77ghz"
+ },
+ "derived": {
+  "wavelength": 0.0038934085454545454,
+  "te": 6.4e-05,
+  "bandwidthEff": 384000000.0,
+  "rangeResolution": 0.39035476302083333,
+  "maxRange": 99.93081933333333,
+  "velocityResolution": 0.23763479891690342,
+  "maxVelocity": 15.208627130681819,
+  "nVirtual": 8.0,
+  "nRangeBins": 256.0,
+  "frameActiveTime": 0.008192
+ },
+ "scatterers": [
+  {
+   "x": -4.341204441673258,
+   "y": 24.6201938253052,
+   "z": 0.0,
+   "vx": -2.777124390339887,
+   "vy": 15.749855065751516,
+   "vz": 0.0,
+   "rcs": 1.0,
+   "phase0": 0.0
+  }
+ ],
+ "amplitudeMode": "snr",
+ "snrRefDb": 20.0,
+ "refRange": 10.0,
+ "noise": false,
+ "tFrame": 0.0,
+ "processing": {
+  "rangeWindow": "hann",
+  "dopplerWindow": "hann",
+  "angleWindow": "rect",
+  "angleFftSize": 64,
+  "peakInterpolation": "parabolic-log-power",
+  "tdmCompensation": true
+ },
+ "cubeSamples": [
+  {
+   "k": 0,
+   "m": 0,
+   "n": 0,
+   "re": 1.5736193296875574,
+   "im": 0.28934789654269716
+  },
+  {
+   "k": 7,
+   "m": 127,
+   "n": 255,
+   "re": 0.6746114009368094,
+   "im": -1.4325279859898243
+  },
+  {
+   "k": 4,
+   "m": 42,
+   "n": 51,
+   "re": 1.0033589447332172,
+   "im": -1.2391651514221849
+  }
+ ],
+ "rdPowerDb": {
+  "maxDb": 10.659721599011737,
+  "maxCell": [
+   64,
+   3
+  ],
+  "meanDb": -28.56498735984895
+ },
+ "expected": {
+  "peaks": [
+   {
+    "rangeBin": 64,
+    "dopplerBin": 3,
+    "angleBin": 20,
+    "rangeBinFrac": 64.43406046643025,
+    "dopplerBinFrac": 3.4931763590780727,
+    "angleBinFrac": 20.423591328185825,
+    "range": 25.152142403843428,
+    "velocity": -14.37852686901102,
+    "angleDeg": -21.208493354620884,
+    "angleDegNoTdmComp": -4.212937560652539,
+    "angleBinNoTdmComp": 30,
+    "powerDb": 10.659721599011737,
+    "truth": {
+     "range": 25.065506598777272,
+     "velocity": 15.992821967107599,
+     "velocityAliased": -14.42443229425604,
+     "angleDeg": -10.0,
+     "rangeBinAnalytic": 64.21211926505818,
+     "dopplerBinAnalytic": 3.29999999999999,
+     "angleBinAnalytic": 26.44325831465823
+    }
+   }
+  ]
+ },
+ "tolerances": {
+  "cubeRelMax": 1e-09,
+  "rdPowerDbAbs": 1e-06,
+  "binFracAbs": 1e-06,
+  "integerBins": 0,
+  "rangeAbs": 1e-06,
+  "velocityAbs": 1e-06,
+  "angleDegAbs": 0.0001,
+  "truthRangeAbs": 0.19517738151041666,
+  "truthVelocityAbs": 0.11881739945845171,
+  "truthAngleDegAbs": 2.0
+ }
+}
