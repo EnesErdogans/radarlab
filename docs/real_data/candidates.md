@@ -32,7 +32,7 @@ TI sample captures sit in mmWave Studio / Radar Toolbox, on ti.com and dev.ti.co
 * Paper: X. Gao, G. Xing, S. Roy, H. Liu, "Experiments with mmWave Automotive Radar Test-bed," Asilomar 2019, DOI 10.1109/IEEECONF44664.2019.9048939, arXiv:1912.12566.
 * Radar: TI AWR1843 + DCA1000, 2 TX (horizontal, TDM: odd chirp = first TX, even = second) × 4 RX.
 * Config (repo `config/get_params_value.m` and the UWCR README `config.py`): startFreq 77 GHz, slope 21.0017 MHz/µs, fs 4 Msps complex, N 128, 255 loops, chirp period 60 µs per TX (120 µs per TX cycle), frame period 33.33 ms, B_eff ≈ 0.672 GHz, ΔR ≈ 0.223 m.
-  **Not given:** adcStartTime, idle/ramp split, rxGain. Assume adcStartTime ≈ 6 µs and document it.
+  **Not given:** adcStartTime, idle/ramp split, rxGain. Assume adcStartTime ≈ 6 µs and document it. (Checked: it is unobservable to first order. A change of 6 µs moves the velocity scale by 0.17 % and the range by about 1e-5 m.)
 * Scenes: `pms1000` = pedestrian, `bms1000` = bicycle, `cms1000` = car, 30 frames each, outdoor campus. These are named after UWCR sequences (`2019_04_09_pms1000`…). Labels and camera images are in the full UWCR set (#2), not in the template.
 * Format: MATLAB v5 `.mat`, variable `data_frames`, complex128, shape (4 RX, F·M·nTx·N) = (4, 1,958,400). This is already readDCA1000-decoded: columns run frame → loop → TX → sample.
 * URLs and HEAD (all 200, real MAT header, no LFS; `.gitattributes` has no LFS rule):
@@ -43,7 +43,7 @@ TI sample captures sit in mmWave Studio / Radar Toolbox, on ti.com and dev.ti.co
   * reshaping gives (F, K, M, N) = (30, 8, 255, 128);
   * after static removal, the strongest moving return is at about 6.9–7.1 m (range bin 31–32), −0.1 to −0.2 m/s;
   * about 70 % of the power is in the positive-range half, so I/Q order is correct with no conjugation;
-  * values are small (max |x| ≈ 166), so the dataset is scaled.
+  * values are small (max |x| ≈ 166), but they are integer ADC codes, not rescaled data: the noise σ is ≈ 7.6 LSB per complex sample (corrected 2026-11-24; see `python/examples/real_data/`).
 * Mapping to `radarlab.io`: this is not a `.bin`, so build the `RadarConfig` by hand. Use the values above, plus:
   * `tx_pos=[0, 2]` (AWR1843 TX0/TX2) and `rx_pos=[0, .5, 1, 1.5]`;
   * `chirp_period=60e-6`, `n_chirps=255`, `iq_mode='complex'`.

@@ -1,0 +1,217 @@
+{
+ "pedestrian": {
+  "shape": [
+   30,
+   8,
+   255,
+   128
+  ],
+  "max_abs": 166.43617395265971,
+  "dc_abs_per_channel": [
+   25.49,
+   10.02,
+   22.02,
+   2.23,
+   21.25,
+   13.23,
+   13.33,
+   10.3
+  ],
+  "pos_half_fraction_total": 0.897603317556985,
+  "pos_half_fraction_moving": 0.8418809488281888,
+  "dyn_power_first4_over_mid": 1.0435606802919604,
+  "dyn_power_last4_over_mid": 0.9927071399064927,
+  "static_ref_bin": 32,
+  "static_ref_range_m": 7.137337882171443,
+  "tx_hypotheses": {
+   "order(0,1) d=2": {
+    "coherence_median": 0.8111088598285475,
+    "theta_deg_median": -1.6499999999999917
+   },
+   "order(1,0) d=2": {
+    "coherence_median": 0.780480639218569,
+    "theta_deg_median": -0.17499999999999716
+   },
+   "order(0,1) d=1": {
+    "coherence_median": 0.828574904301137,
+    "theta_deg_median": -2.5999999999999943
+   },
+   "order(0,1) d=3": {
+    "coherence_median": 0.8069637903603597,
+    "theta_deg_median": -0.9499999999999886
+   }
+  },
+  "channel_gain_db": [
+   3.68,
+   1.05,
+   -0.04,
+   -1.7,
+   3.4,
+   0.12,
+   -6.24,
+   -5.27
+  ],
+  "channel_phase_err_deg": [
+   -0.0,
+   22.9,
+   35.2,
+   16.4,
+   -10.1,
+   55.7,
+   29.6,
+   -31.9
+  ]
+ },
+ "cyclist": {
+  "shape": [
+   30,
+   8,
+   255,
+   128
+  ],
+  "max_abs": 176.23280057923384,
+  "dc_abs_per_channel": [
+   25.4,
+   11.19,
+   22.3,
+   1.33,
+   21.2,
+   13.97,
+   13.97,
+   10.08
+  ],
+  "pos_half_fraction_total": 0.8910483608473604,
+  "pos_half_fraction_moving": 0.9018933544854848,
+  "dyn_power_first4_over_mid": 1.110579492604729,
+  "dyn_power_last4_over_mid": 0.909713037005472,
+  "static_ref_bin": 48,
+  "static_ref_range_m": 10.706006823257164,
+  "tx_hypotheses": {
+   "order(0,1) d=2": {
+    "coherence_median": 0.9262446990096469,
+    "theta_deg_median": -3.049999999999997
+   },
+   "order(1,0) d=2": {
+    "coherence_median": 0.7712059376089937,
+    "theta_deg_median": 0.6750000000000043
+   },
+   "order(0,1) d=1": {
+    "coherence_median": 0.919730301578469,
+    "theta_deg_median": -4.474999999999994
+   },
+   "order(0,1) d=3": {
+    "coherence_median": 0.9137772825965724,
+    "theta_deg_median": -2.17499999999999
+   }
+  },
+  "channel_gain_db": [
+   2.34,
+   0.62,
+   2.79,
+   -1.17,
+   0.8,
+   -1.47,
+   -0.02,
+   -7.4
+  ],
+  "channel_phase_err_deg": [
+   -0.0,
+   2.9,
+   -12.8,
+   9.6,
+   -20.3,
+   -7.7,
+   -6.1,
+   27.5
+  ]
+ },
+ "car": {
+  "shape": [
+   30,
+   8,
+   255,
+   128
+  ],
+  "max_abs": 156.92354826475216,
+  "dc_abs_per_channel": [
+   24.3,
+   10.5,
+   22.26,
+   2.46,
+   20.41,
+   13.41,
+   13.53,
+   9.12
+  ],
+  "pos_half_fraction_total": 0.9337325149801516,
+  "pos_half_fraction_moving": 0.5137520793305622,
+  "dyn_power_first4_over_mid": 0.9962242767141415,
+  "dyn_power_last4_over_mid": 0.9938551108426773,
+  "static_ref_bin": 48,
+  "static_ref_range_m": 10.706006823257164,
+  "tx_hypotheses": {
+   "order(0,1) d=2": {
+    "coherence_median": 0.9258883861851424,
+    "theta_deg_median": -25.200000000000003
+   },
+   "order(1,0) d=2": {
+    "coherence_median": 0.7538800850575959,
+    "theta_deg_median": -32.0
+   },
+   "order(0,1) d=1": {
+    "coherence_median": 0.2789215075389405,
+    "theta_deg_median": -37.775
+   },
+   "order(0,1) d=3": {
+    "coherence_median": 0.768915234465333,
+    "theta_deg_median": -17.450000000000003
+   }
+  },
+  "channel_gain_db": [
+   -4.11,
+   -3.07,
+   -0.77,
+   -0.54,
+   1.16,
+   1.22,
+   2.52,
+   1.51
+  ],
+  "channel_phase_err_deg": [
+   0.0,
+   13.0,
+   -7.2,
+   -11.2,
+   -9.2,
+   11.8,
+   -2.0,
+   -0.7
+  ]
+ },
+ "doppler_sign_check": {
+  "range_rate_fit_mps": -0.37648130657926404,
+  "median_doppler_velocity_mps": -0.5354374925852354,
+  "n_frames": 24,
+  "consistent": true
+ },
+ "adc_start_sensitivity": {
+  "0us": {
+   "range": 6.990170152335431,
+   "velocity": -0.7033095525996371,
+   "azimuth_deg": -2.001227338423017,
+   "power_db": 34.643551688290685
+  },
+  "6us": {
+   "range": 6.990161910176004,
+   "velocity": -0.704545026944072,
+   "azimuth_deg": -2.001288596567428,
+   "power_db": 34.631565096925776
+  },
+  "12us": {
+   "range": 6.990153663306305,
+   "velocity": -0.7057778043984287,
+   "azimuth_deg": -2.00134802728002,
+   "power_db": 34.61594018562853
+  }
+ }
+}

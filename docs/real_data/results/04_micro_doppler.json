@@ -1,0 +1,81 @@
+{
+ "pedestrian": {
+  "real": {
+   "torso_velocity_median": -0.253477118844697,
+   "torso_accel_fit": -0.20329929429673763,
+   "extent_median": 0.6336927971117424,
+   "extent_p95": 1.1406470348011364,
+   "v_min_p5": -0.8871699159564395,
+   "v_max_p95": 0.38021567826704544,
+   "bandwidth_rms_median": 0.12639697201882483,
+   "limb_envelope_period_s": 0.75,
+   "ac_peak": 0.0767622392539678
+  },
+  "sim ideal": {
+   "torso_velocity_median": -0.253477118844697,
+   "torso_accel_fit": -0.17429444704439156,
+   "extent_median": 1.0772777550899622,
+   "extent_p95": 1.774339831912879,
+   "v_min_p5": -1.267385594223485,
+   "v_max_p95": 0.506954237689394,
+   "bandwidth_rms_median": 0.23703484165298674,
+   "limb_envelope_period_s": 0.8300000000000001,
+   "ac_peak": 0.20773243445460177
+  },
+  "sim all": {
+   "torso_velocity_median": -0.38021567826704544,
+   "torso_accel_fit": -0.17712394862109174,
+   "extent_median": 1.013908475378788,
+   "extent_p95": 1.774339831912879,
+   "v_min_p5": -1.267385594223485,
+   "v_max_p95": 0.506954237689394,
+   "bandwidth_rms_median": 0.2278900138966536,
+   "limb_envelope_period_s": 0.835,
+   "ac_peak": 0.20014507599357081
+  },
+  "model": {
+   "gait_cycle_hz_boulic": 0.35301498970000994,
+   "gait_cycle_period_s": 2.832740901030277,
+   "step_period_s": 1.4163704505151384
+  }
+ },
+ "cyclist": {
+  "real": {
+   "torso_velocity_median": -0.38021567826704544,
+   "torso_accel_fit": -0.5794472983636513,
+   "extent_median": 1.0139084753787881,
+   "extent_p95": 1.3941241536458335,
+   "v_min_p5": -1.6476012724905305,
+   "v_max_p95": 0.38021567826704544,
+   "bandwidth_rms_median": 0.18054586636740894,
+   "limb_envelope_period_s": 0.6900000000000001,
+   "ac_peak": 0.1354814784395028
+  },
+  "sim ideal": {
+   "torso_velocity_median": -0.38021567826704544,
+   "torso_accel_fit": -0.4901204038378065,
+   "extent_median": 0.6336927971117425,
+   "extent_p95": 1.0139084753787881,
+   "v_min_p5": -1.267385594223485,
+   "v_max_p95": -0.253477118844697,
+   "bandwidth_rms_median": 0.09567794419056772,
+   "limb_envelope_period_s": 0.45,
+   "ac_peak": 0.12420744952635995
+  },
+  "sim all": {
+   "torso_velocity_median": -0.38021567826704544,
+   "torso_accel_fit": -0.48919176887061755,
+   "extent_median": 0.5069542376893938,
+   "extent_p95": 0.7604313565340911,
+   "v_min_p5": -1.267385594223485,
+   "v_max_p95": -0.253477118844697,
+   "bandwidth_rms_median": 0.0954542021994215,
+   "limb_envelope_period_s": 0.26,
+   "ac_peak": 0.16091999626774944
+  },
+  "model": {
+   "crank_hz_at_end": 0.1246111688017606,
+   "wheel_top_velocity_at_end": -1.3842645547886334
+  }
+ }
+}
