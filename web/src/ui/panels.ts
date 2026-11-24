@@ -107,8 +107,8 @@ export class ChirpPanel extends CanvasPanel {
     const { cfg, d } = f;
     const tr = selTruth(f, this.app.selectedId());
     const H = this.s.h;
-    const top: Rect = { x: MARGIN.l, y: 22, w: this.s.w - MARGIN.l - MARGIN.r, h: Math.max(30, H * 0.46 - 36) };
-    const bot: Rect = { x: MARGIN.l, y: H * 0.46 + 16, w: top.w, h: Math.max(30, H * 0.54 - 16 - MARGIN.b) };
+    const top: Rect = { x: MARGIN.l, y: 24, w: this.s.w - MARGIN.l - MARGIN.r, h: Math.max(30, H * 0.46 - 36) };
+    const bot: Rect = { x: MARGIN.l, y: H * 0.46 + 20, w: top.w, h: Math.max(30, H * 0.54 - 16 - MARGIN.b) };
     // --- f–t sketch
     const tc = cfg.chirpPeriod * 1e6,
       ramp = (cfg.rampTime ?? cfg.chirpPeriod) * 1e6;
@@ -150,13 +150,13 @@ export class ChirpPanel extends CanvasPanel {
     saw(vis, THEME.accent2, [5, 3]);
     legend(c, top.x + 6, 10, [
       { label: t('tx'), color: THEME.accent },
-      { label: t('rx') + (k > 1.01 ? ` (${t('delayExag', { k: k.toFixed(0) })})` : ''), color: THEME.accent2, dash: [5, 3] },
+      { label: t('rx') + (k > 1.01 ? ` · ${t('delayExag', { k: k.toFixed(0) })}` : ''), color: THEME.accent2, dash: [5, 3] },
       { label: t('adcWin'), color: 'rgba(56,189,248,0.5)', width: 6 },
     ]);
     c.fillStyle = THEME.dim;
     c.textAlign = 'right';
     c.textBaseline = 'top';
-    c.fillText(`${t('time')} [µs]`, top.x + top.w, top.y + top.h + 3);
+    c.fillText(`${t('time')} [µs]`, top.x + top.w - 4, top.y + 3);
     // --- IF waveform
     const N = cfg.nSamples;
     const re = f.bufs.ifRe,
@@ -187,15 +187,17 @@ export class ChirpPanel extends CanvasPanel {
     c.restore();
     const fb = cfg.slope * tau + (tr ? (2 * tr.vr) / d.lambda : 0);
     const fbS = Math.abs(fb) >= 1e6 ? `${(fb / 1e6).toFixed(3)} MHz` : `${(fb / 1e3).toFixed(1)} kHz`;
-    legend(c, bot.x + 6, bot.y - 8, [
+    c.fillStyle = 'rgba(17,22,29,0.85)';
+    c.fillRect(bot.x + bot.w - 86, bot.y + 2, 84, 16);
+    legend(c, bot.x + bot.w - 84, bot.y + 10, [
       { label: 'Re', color: THEME.accent },
       { label: 'Im', color: THEME.violet },
     ]);
     c.font = THEME.fontSmall;
     c.fillStyle = THEME.text;
-    c.textAlign = 'right';
+    c.textAlign = 'left';
     c.textBaseline = 'bottom';
-    if (tr) c.fillText(`${typeName(tr)}: τ = ${(tau * 1e9).toFixed(1)} ns, ${t('beat')} = ${fbS}  (ch 0, chirp 0)`, bot.x + bot.w, bot.y - 2);
+    if (tr) c.fillText(`${typeName(tr)}: τ = ${(tau * 1e9).toFixed(1)} ns · ${t('beat')} ≈ ${fbS}`, bot.x, bot.y - 2);
   }
   protected hover(p: { x: number; y: number }): void {
     const a = this.axes;
@@ -410,7 +412,7 @@ export class CutPanel extends CanvasPanel {
     c.restore();
     legend(
       c,
-      rect.x,
+      rect.x - 40,
       10,
       types.map((ty, i) => ({ label: ty + (i === ai ? ` (${t('active')})` : ''), color: cols[i], dash: i === ai ? [] : [4, 3], width: i === ai ? 2 : 1 })),
     );
@@ -418,7 +420,7 @@ export class CutPanel extends CanvasPanel {
     c.fillStyle = THEME.dim;
     c.textAlign = 'right';
     c.textBaseline = 'top';
-    c.fillText(t('cutAt', { d: f.meta.cutBin, v: ((f.meta.cutBin - f.meta.M / 2) * d.dv).toFixed(2) }), rect.x + rect.w - 4, rect.y + 4);
+    c.fillText(t('cutAt', { d: f.meta.cutBin, v: ((f.meta.cutBin - f.meta.M / 2) * d.dv).toFixed(2) }), rect.x + rect.w - 4, rect.y + rect.h - 14);
   }
   protected hover(p: { x: number; y: number }): void {
     const f = this.app.frame();
@@ -433,11 +435,12 @@ export class CutPanel extends CanvasPanel {
 
 /** Equal-aspect Cartesian axes for the radar fan / bird's-eye views. */
 function fanAxes(rect: Rect, rMax: number, xHalfMin: number, yPad = 0.03): Axes {
+  // radar anchored at the bottom; spare room goes to the top / sides
   const yRange = rMax * (1 + 2 * yPad);
   const sc = Math.min(rect.w / (2 * xHalfMin), rect.h / yRange);
   const xh = rect.w / (2 * sc),
     yr = rect.h / sc;
-  const y0 = -rMax * yPad - (yr - yRange) / 2;
+  const y0 = -rMax * yPad;
   return makeAxes(rect, -xh, xh, y0, y0 + yr);
 }
 
@@ -630,7 +633,7 @@ export class BevPanel extends CanvasPanel {
     const { d } = f;
     const rMax = d.rMax;
     const rect = plotRect(this.s, { ...MARGIN, t: 26 });
-    const a = fanAxes(rect, rMax, rMax * 0.62);
+    const a = fanAxes(rect, rMax, rMax * 0.42);
     this.axes = a;
     const sc = rect.w / (a.x1 - a.x0);
     c.fillStyle = '#0a0e13';
@@ -889,9 +892,9 @@ export class BudgetPanel extends Panel {
     const tot = STAGES.reduce((s, k) => s + tm[k], 0);
     const mx = Math.max(1, ...STAGES.map((k) => tm[k]));
     const bars =
-      `<h3>${t('timings')} · ${t('total')} ${tot.toFixed(1)} ms · ${t('fpsSim')} ${this.app.simFps().toFixed(0)} · ${t('fpsUi')} ${this.app.uiFps().toFixed(0)}</h3><div class="bars">` +
+      `<h3>${t('timings')}</h3><div class="tsum">${t('total')} <b>${tot.toFixed(1)} ms</b> · ${t('fpsSim')} <b>${this.app.simFps().toFixed(0)}</b> · ${t('fpsUi')} <b>${this.app.uiFps().toFixed(0)}</b></div><div class="bars">` +
       STAGES.map((k) => `<div class="bar"><span>${k}</span><i style="width:${((tm[k] / mx) * 100).toFixed(1)}%"></i><b>${tm[k].toFixed(1)}</b></div>`).join('') +
       '</div>';
-    this.body.innerHTML = `<div class="bcol">${tbl}</div><div class="bcol">${warn}${bars}</div>`;
+    this.body.innerHTML = `<div class="bcol">${tbl}</div><div class="bcol">${bars}</div><div class="bwarn">${warn}</div>`;
   }
 }

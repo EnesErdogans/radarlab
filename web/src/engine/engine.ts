@@ -326,7 +326,7 @@ export class Engine {
     t0 = now();
     this.timings.cluster = t0 - t1;
 
-    const meas = mergeDetections(this.det.dets, this.det.count, Math.max(2.5, 2.5 * d.rangeRes), Math.max(8, 4 * d.dv));
+    const meas = mergeDetections(this.det.dets, this.det.count, Math.max(2.5, 2.5 * d.rangeRes), Math.max(8, 4 * d.dv), 3 * d.rangeRes, d.angleResDeg);
     if (updateState) this.tracker.step(meas, cfg.framePeriod);
     t1 = now();
     this.timings.track = t1 - t0;

@@ -34,6 +34,7 @@ export interface TrackerParams {
   vMax: number; // unambiguous velocity (for wrapped Doppler innovation); 0 = no wrap
   histLen: number;
   spawnSuppress: number; // no new track within this distance [m] of an existing one (extended targets)
+  spawnGate: number; // … nor inside this χ² (position) gate of an existing track
 }
 
 export function defaultTrackerParams(): TrackerParams {
@@ -49,6 +50,7 @@ export function defaultTrackerParams(): TrackerParams {
     vMax: 0,
     histLen: 40,
     spawnSuppress: 3.5,
+    spawnGate: 16,
   };
 }
 
@@ -306,6 +308,9 @@ export class Tracker {
       if (tr.hist.length > 2 * p.histLen) tr.hist.splice(0, tr.hist.length - 2 * p.histLen);
     }
     this.tracks = this.tracks.filter((t) => t.misses <= (t.confirmed ? p.maxMissConfirmed : p.maxMissTentative));
+    const H = new Float64Array(12),
+      nu = new Float64Array(3),
+      S = new Float64Array(9);
     for (let j = 0; j < nM; j++) {
       if (used[j]) continue;
       const z = meas[j];
@@ -314,6 +319,12 @@ export class Tracker {
       let near = false;
       for (const tr of this.tracks) {
         if (Math.hypot(tr.s[0] - zx, tr.s[1] - zy) < p.spawnSuppress) {
+          near = true;
+          break;
+        }
+        // inside a widened gate of an existing track (extended / poorly resolved targets)
+        this.innov(tr, z, H, nu, S);
+        if (this.d2pos(nu, S) < p.spawnGate) {
           near = true;
           break;
         }
@@ -351,11 +362,17 @@ function inv3(m: Float64Array): Float64Array {
  * are kept separate (e.g. a pedestrian next to a car).
  */
 export function mergeDetections(
-  dets: { x: number; y: number; velocity: number; power: number }[],
+  dets: { x: number; y: number; velocity: number; power: number; range?: number; angleDeg?: number }[],
   n: number,
   eps = 2.0,
   dvMax = 8,
+  rEps = 0,
+  azEpsDeg = 0,
 ): Measurement[] {
+  // linked if close in Cartesian space, or (for coarse angle resolution) close in range and azimuth
+  const linked = (a: (typeof dets)[number], b: (typeof dets)[number]) =>
+    Math.hypot(a.x - b.x, a.y - b.y) < eps ||
+    (rEps > 0 && a.range !== undefined && b.range !== undefined && Math.abs(a.range - b.range) < rEps && Math.abs((a.angleDeg ?? 0) - (b.angleDeg ?? 0)) < azEpsDeg);
   const label = new Int32Array(n).fill(-1);
   const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => dets[b].power - dets[a].power);
   const queue = new Int32Array(n);
@@ -382,7 +399,7 @@ export function mergeDetections(
       for (let j = 0; j < n; j++) {
         if (label[j] >= 0) continue;
         const o = dets[j];
-        if (Math.hypot(o.x - s.x, o.y - s.y) < eps && Math.abs(o.velocity - v0) < dvMax) {
+        if (linked(o, s) && Math.abs(o.velocity - v0) < dvMax) {
           label[j] = nc;
           queue[qt++] = j;
         }

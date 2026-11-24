@@ -60,6 +60,12 @@ export class Surface {
     const c = this.ctx;
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     c.clearRect(0, 0, this.w, this.h);
+    // reset state that persists between frames
+    c.textAlign = 'left';
+    c.textBaseline = 'alphabetic';
+    c.lineWidth = 1;
+    c.setLineDash([]);
+    c.globalAlpha = 1;
     return c;
   }
 }
@@ -278,6 +284,7 @@ export function legend(c: CanvasRenderingContext2D, x: number, y: number, items:
   c.save();
   c.font = THEME.fontSmall;
   c.textBaseline = 'middle';
+  c.textAlign = 'left';
   let cx = x;
   for (const it of items) {
     c.strokeStyle = it.color;
