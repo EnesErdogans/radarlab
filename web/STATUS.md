@@ -17,7 +17,8 @@
 automotive ≈ 46 (≈ 22 fps; synth 22, range FFT 5, Doppler 6, RA map 6.5, CFAR 2), micro ≈ 26, drone ≈ 106 (realtime needs 10 fps).
 
 ## Golden vectors
-`tests/golden.test.ts` reads every `../golden/*.json`. CFAR α table and presets pass. Scenario files (cube, RD dB map, peaks, TDM, truth) passed bit-for-bit (1e-6) under convention v1; after brief rev. 1 they are **skipped while `conventionVersion < 2`** and must be re-checked once Python regenerates them.
+`tests/golden.test.ts` reads every `../golden/*.json` (skips if none; skips scenario files with `conventionVersion < 2`). Against the **conventionVersion 2** files all checks pass: derived params, presets/windows (1e-12), raw cube (exact 1e-9, phasor recurrence 1e-7), cube samples, RD dB map (1e-6 dB, cells within 90 dB of peak), peaks (integer bins, fractional bins / range / velocity 1e-6, angle 1e-4°, angle without TDM compensation), truth checks, CFAR α (K=1 all types; CA Gamma(K) for K=4, 8). Not checked: OS/GO/SO Gamma(K>1) rows (TS uses K=1 formulas there).
+Angle kernel: +j (conjugated snapshot + forward FFT), θ > 0 → bin > A/2, sinθ = (a − A/2)/(A·d), as in the reference.
 
 ## Known issues / next
 - Synthesis dominates frame time (compute bound, ~3 GFLOP/s scalar JS); WASM-SIMD would help.

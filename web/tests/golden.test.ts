@@ -113,8 +113,16 @@ describe('golden vectors (python reference)', () => {
       if (Array.isArray(g.table)) {
         it('CFAR scale factors (CA, GO, SO, OS, CA-Gamma K=4)', () => {
           const rel = T.rel ?? 1e-9;
+          let skippedK = 0;
           for (const row of g.table) {
-            const ctx = `n=${row.n} pfa=${row.pfa}`;
+            const K = row.K ?? 1;
+            const ctx = `K=${K} n=${row.n} pfa=${row.pfa}`;
+            if (K > 1) {
+              // TS implements the Gamma(K)-exact α for CA only (brief rev. 1); OS/GO/SO use K=1 formulas
+              if (row.ca !== undefined) relClose(caAlphaGamma(row.n, K, row.pfa), row.ca, rel, ctx + ' CA-Gamma');
+              skippedK++;
+              continue;
+            }
             if (row.ca !== undefined) relClose(caAlpha(row.n, row.pfa), row.ca, rel, ctx + ' CA');
             if (row.osK !== undefined) expect(osRankIndex(row.n, g.osRank ?? 0.75), ctx + ' osK').toBe(row.osK);
             if (row.os !== undefined) relClose(osAlpha(row.n, row.osK, row.pfa), row.os, rel, ctx + ' OS');
@@ -122,6 +130,7 @@ describe('golden vectors (python reference)', () => {
             if (row.so !== undefined) relClose(soAlpha(Math.floor(row.n / 2), row.pfa), row.so, rel, ctx + ' SO');
             if (row.caGammaK4 !== undefined) relClose(caAlphaGamma(row.n, 4, row.pfa), row.caGammaK4, rel, ctx + ' CA-Gamma4');
           }
+          if (skippedK) console.info(`cfar_alpha: OS/GO/SO Gamma(K>1) rows not checked (${skippedK} rows; TS uses K=1 formulas for these)`);
         });
         return;
       }
