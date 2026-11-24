@@ -274,7 +274,11 @@ def v5_multipath(quick: bool = True) -> ValidationResult:
     theory = 4 * np.sin(2 * np.pi * hr * ht / (lam * d)) ** 2
     nulls_th = np.array([2 * hr * ht / (n * lam) for n in range(1, 10)])
     nulls_th = nulls_th[(nulls_th > d[0]) & (nulls_th < d[-1])]
-    mins = np.where((ratio[1:-1] < ratio[:-2]) & (ratio[1:-1] <= ratio[2:]) & (ratio[1:-1] < 0.5))[0] + 1
+    # one minimum per contiguous valley below 0.25 (fine sweeps ripple around shoulders)
+    below = ratio < 0.25
+    edges = np.flatnonzero(np.diff(np.r_[0, below.astype(int), 0]))
+    mins = np.array([a + int(np.argmin(ratio[a:b])) for a, b in zip(edges[::2], edges[1::2])
+                     if a > 0 and b < len(ratio)], int)
     rows = []
     ok = len(mins) == len(nulls_th)
     for nt in nulls_th:

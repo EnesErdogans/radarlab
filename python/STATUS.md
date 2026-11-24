@@ -1,22 +1,22 @@
 # Python reference: STATUS
 
 ## Done
-* Phase 1: config and presets, scene targets (point, car+wheels, pedestrian, drone, bird, clutter), exact beat synthesis,
-  full DSP chain (FFT, MTI, CFAR CA/GO/SO/OS, clustering, DoA FFT/MVDR/MUSIC, point cloud, micro-Doppler), EKF/GNN tracker,
-  pipeline/Simulator, metrics (CRLB, Pd/Pfa), golden vectors (7 files), 4 example figures.
-* Phase 2: Swerling 1–4, ADC quantization, IF filters, phase noise with range correlation, leakage, IQ imbalance, two-ray, FMCW interference.
-* Phase 3: TI `.cfg` parser and DCA1000 reader/writer (complex and real, round-trip tested).
-* Tests: 84 passing in about 10 s (`pytest python/tests`).
+* Phase 1–3 as in README. Convention version 2 (brief REVISION 1): negative spatial phase, +j angle kernel. All golden files are regenerated with `conventionVersion: 2`.
+* Exact Gamma(K) CFAR α for CA, OS, GO and SO. It is the pipeline default; the table for K = 1, 4, 8 is in `golden/cfar_alpha.json`.
+* Leakage is synthesised inside the frame and shares the phase-noise realisation. Swerling 1/3 gains are shared across channels.
+* Line-blade (sinc) rotor model, with the flash-rate law tested for N_b = 2, 3, 4, 5. 2-segment bird (fidelity §12.2).
+* Closed-form Pd for SW1 (correlated over K), SW2 and SW3 (K = 1). CA-CFAR Pd for SW1.
+* Validation matrix V1–V11 in `radarlab.validation`, tested in pytest (quick sizes plus slow paper-grade sizes). The report script writes `examples/out/validation_report.md`.
+* Closed loop .cfg → simulate → int16 DCA1000 .bin → read → process gives identical codes and identical detections.
 
 ## Next
-* Antenna element patterns, chirp nonlinearity, distributed (range-spread) clutter.
-* Monte-Carlo ROC scripts (Pd vs SNR, empirical vs analytic) for the paper.
-* Validation against a real DCA1000 capture. The `conj` flag is in place for devices that need it.
-* Pedestrian model: full Boulic joint-angle trajectories (the current model is a simplified pendulum).
+* TI IF-filter model (two first-order HPF sections at TI corner indices, 4th-order LPF) and the tone-mode vs time-domain comparison (fidelity §0.2, §4).
+* Chirp nonlinearity (§3), element patterns and channel calibration (§7), distributed clutter (§14), Fresnel Γ (§10).
+* Full Boulic pedestrian model. Validation on public DCA1000 captures (V11, second half).
 
 ## Known issues / approximations
-* Two-ray "mixed" path is an equivalent scatterer on the direct line of sight (angle of arrival approximated).
-* FMCW interferer uses an ideal-LPF mask on the instantaneous difference frequency.
-* GO/SO α at range edges is approximate (see README).
-* TDM compensation uses the aliased velocity estimate. For |v| > vmax the angle is biased.
-  This is shown by `golden/automotive_velocity_alias.json`.
+* Two-ray: the mixed path is an equivalent scatterer on the direct line of sight, so its elevation is approximate. Null positions are exact (V5).
+* FMCW interference uses an ideal-LPF mask on the instantaneous difference frequency.
+* GO/SO α at range edges uses n = min(halves).
+* For |v| > vmax, TDM compensation uses the aliased velocity, so the angle is biased.
+* SW2/SW4 are per chirp. The fidelity doc recommends per-frame-per-channel decorrelation instead; that is not implemented.
