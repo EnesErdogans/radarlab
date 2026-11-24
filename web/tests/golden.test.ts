@@ -9,7 +9,7 @@ import { defaultSettings, derive, type Derived, type RadarConfig, type SimSettin
 import { Engine } from '../src/engine/engine';
 import { Synthesizer, type PointScatterer } from '../src/sim/synth';
 import { makeWindow } from '../src/dsp/window';
-import { caAlpha, caAlphaGamma, goAlpha, osAlpha, osRankIndex, soAlpha } from '../src/dsp/cfar';
+import { caAlpha, caAlphaGamma, goAlpha, gsAlphaGamma, osAlpha, osAlphaGamma, osRankIndex, soAlpha } from '../src/dsp/cfar';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const dir = join(here, '..', '..', 'golden');
@@ -111,26 +111,32 @@ describe('golden vectors (python reference)', () => {
     describe(`${f}`, () => {
       // ---------- CFAR α table ----------
       if (Array.isArray(g.table)) {
-        it('CFAR scale factors (CA, GO, SO, OS, CA-Gamma K=4)', () => {
+        it('CFAR scale factors (CA, GO, SO, OS; K=1 closed forms and exact Gamma(K) for K>1)', () => {
           const rel = T.rel ?? 1e-9;
-          let skippedK = 0;
+          let worst = 0;
+          const cmp = (ts: number, py: number, ctx: string) => {
+            relClose(ts, py, rel, ctx);
+            worst = Math.max(worst, Math.abs(ts - py) / Math.abs(py));
+          };
           for (const row of g.table) {
             const K = row.K ?? 1;
             const ctx = `K=${K} n=${row.n} pfa=${row.pfa}`;
-            if (K > 1) {
-              // TS implements the Gamma(K)-exact α for CA only (brief rev. 1); OS/GO/SO use K=1 formulas
-              if (row.ca !== undefined) relClose(caAlphaGamma(row.n, K, row.pfa), row.ca, rel, ctx + ' CA-Gamma');
-              skippedK++;
-              continue;
-            }
-            if (row.ca !== undefined) relClose(caAlpha(row.n, row.pfa), row.ca, rel, ctx + ' CA');
+            const half = Math.floor(row.n / 2);
             if (row.osK !== undefined) expect(osRankIndex(row.n, g.osRank ?? 0.75), ctx + ' osK').toBe(row.osK);
-            if (row.os !== undefined) relClose(osAlpha(row.n, row.osK, row.pfa), row.os, rel, ctx + ' OS');
-            if (row.go !== undefined) relClose(goAlpha(Math.floor(row.n / 2), row.pfa), row.go, rel, ctx + ' GO');
-            if (row.so !== undefined) relClose(soAlpha(Math.floor(row.n / 2), row.pfa), row.so, rel, ctx + ' SO');
-            if (row.caGammaK4 !== undefined) relClose(caAlphaGamma(row.n, 4, row.pfa), row.caGammaK4, rel, ctx + ' CA-Gamma4');
+            if (K === 1) {
+              if (row.ca !== undefined) cmp(caAlpha(row.n, row.pfa), row.ca, ctx + ' CA');
+              if (row.os !== undefined) cmp(osAlpha(row.n, row.osK, row.pfa), row.os, ctx + ' OS');
+              if (row.go !== undefined) cmp(goAlpha(half, row.pfa), row.go, ctx + ' GO');
+              if (row.so !== undefined) cmp(soAlpha(half, row.pfa), row.so, ctx + ' SO');
+            } else {
+              if (row.ca !== undefined) cmp(caAlphaGamma(row.n, K, row.pfa), row.ca, ctx + ' CA-Gamma');
+              if (row.os !== undefined) cmp(osAlphaGamma(row.n, row.osK, K, row.pfa), row.os, ctx + ' OS-Gamma');
+              if (row.go !== undefined) cmp(gsAlphaGamma(half, K, row.pfa, 'GO'), row.go, ctx + ' GO-Gamma');
+              if (row.so !== undefined) cmp(gsAlphaGamma(half, K, row.pfa, 'SO'), row.so, ctx + ' SO-Gamma');
+            }
+            if (row.caGammaK4 !== undefined) cmp(caAlphaGamma(row.n, 4, row.pfa), row.caGammaK4, ctx + ' CA-Gamma4');
           }
-          if (skippedK) console.info(`cfar_alpha: OS/GO/SO Gamma(K>1) rows not checked (${skippedK} rows; TS uses K=1 formulas for these)`);
+          console.info(`cfar_alpha: ${g.table.length} rows, worst rel diff ts vs py ${worst.toExponential(2)}`);
         });
         return;
       }

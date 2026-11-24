@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { PRESETS, defaultSettings, type CfarParams, type CfarType } from '../src/config/radar';
-import { Cfar2D, caAlpha, caPfaGamma, goPfa, osAlpha, osPfa, quickselect, soPfa } from '../src/dsp/cfar';
+import { Cfar2D, caAlpha, caAlphaGamma, caPfaGamma, goAlpha, goPfa, gsAlphaGamma, gsPfaGamma, osAlpha, osAlphaGamma, osPfa, osPfaGamma, quickselect, soAlpha, soPfa } from '../src/dsp/cfar';
 import { Engine } from '../src/engine/engine';
 import { Gaussian, mulberry32 } from '../src/sim/rng';
+import { gsLogPfaGamma, osLogPfaGamma } from '../src/dsp/gamma';
 import { defaultScene } from '../src/sim/scenes';
 
 describe('CFAR scale factors', () => {
@@ -21,6 +22,30 @@ describe('CFAR scale factors', () => {
     const n = 16,
       a = 5.3;
     expect(goPfa(n, a) + soPfa(n, a)).toBeCloseTo(2 * Math.pow(1 + a / n, -n), 12);
+  });
+  it('Gamma(K) quadrature reduces to the K=1 closed forms', () => {
+    // the K>1 code path evaluated at K=1 (bypassing the closed-form shortcut)
+    expect(Math.exp(osLogPfaGamma(32, 24, 1, 9.5)) / osPfa(32, 24, 9.5)).toBeCloseTo(1, 11);
+    expect(Math.exp(gsLogPfaGamma(16, 1, 0.6, 'GO')) / goPfa(16, 9.6)).toBeCloseTo(1, 11);
+    expect(Math.exp(gsLogPfaGamma(16, 1, 0.6, 'SO')) / soPfa(16, 9.6)).toBeCloseTo(1, 11);
+  });
+  it('Gamma(K): GO + SO = 2·CA(n/2) identity and solved α hits the design Pfa', () => {
+    for (const K of [2, 4, 8]) {
+      const n = 12,
+        a = 4.2;
+      // P(X > α·max) + P(X > α·min) = P(X > α·S₁/n) + P(X > α·S₂/n) = 2·Pfa_CA(n)
+      expect((gsPfaGamma(n, K, a, 'GO') + gsPfaGamma(n, K, a, 'SO')) / (2 * caPfaGamma(n, K, a))).toBeCloseTo(1, 10);
+      for (const pfa of [1e-3, 1e-6]) {
+        expect(gsPfaGamma(n, K, gsAlphaGamma(n, K, pfa, 'GO'), 'GO') / pfa).toBeCloseTo(1, 9);
+        expect(gsPfaGamma(n, K, gsAlphaGamma(n, K, pfa, 'SO'), 'SO') / pfa).toBeCloseTo(1, 9);
+        expect(osPfaGamma(40, 30, K, osAlphaGamma(40, 30, K, pfa)) / pfa).toBeCloseTo(1, 9);
+      }
+      // K>1 α are below the misused K=1 formulas (noise of a K-sum is less spread)
+      expect(osAlphaGamma(40, 30, K, 1e-5)).toBeLessThan(osAlpha(40, 30, 1e-5));
+      expect(gsAlphaGamma(20, K, 1e-5, 'GO')).toBeLessThan(goAlpha(20, 1e-5));
+      expect(gsAlphaGamma(20, K, 1e-5, 'SO')).toBeLessThan(soAlpha(20, 1e-5));
+      expect(caAlphaGamma(40, K, 1e-5)).toBeLessThan(caAlpha(40, 1e-5));
+    }
   });
   it('quickselect returns the k-th smallest', () => {
     const rng = mulberry32(5);
@@ -45,7 +70,7 @@ describe('CFAR empirical Pfa (K=1, exact Gaussian noise, full chain)', () => {
     maps.push(e.P.slice());
   }
   for (const type of ['CA', 'GO', 'SO', 'OS'] as CfarType[]) {
-    it(`${type}-CFAR Pfa within ±15 % of ${pfa}`, () => {
+    it(`${type}-CFAR Pfa within ±10 % of ${pfa}`, () => {
       const c = new Cfar2D(cfg.nSamples, cfg.nChirps, cf);
       let det = 0,
         cells = 0;
@@ -54,7 +79,37 @@ describe('CFAR empirical Pfa (K=1, exact Gaussian noise, full chain)', () => {
         cells += P.length;
       }
       const emp = det / cells;
-      expect(Math.abs(emp / pfa - 1)).toBeLessThan(0.15);
+      expect(Math.abs(emp / pfa - 1)).toBeLessThan(0.1);
+    });
+  }
+});
+
+describe('CFAR empirical Pfa (K=4 non-coherent channels, exact Gamma(4) α, full chain)', () => {
+  // 1TX×4RX: P = Σ of 4 independent exponential maps → i.i.d. Gamma(4) cells (rect windows)
+  const cfg = { ...PRESETS.automotive.cfg, txPos: [0], rxPos: [0, 0.5, 1, 1.5], nSamples: 128, nChirps: 64 };
+  const pfa = 2e-3;
+  const cf: CfarParams = { type: 'CA', pfa, guardR: 2, guardD: 1, trainR: 6, trainD: 3, osRank: 0.75 };
+  const s = { ...defaultSettings(), noise: true, exactNoise: true, mti: false, rangeWindow: 'rect' as const, dopplerWindow: 'rect' as const, cfar: cf };
+  const frames = 80;
+  const maps: Float64Array[] = [];
+  const e = new Engine(cfg, s, []);
+  for (let f = 0; f < frames; f++) {
+    e.frame = f;
+    e.synthesizeAndTransform(true);
+    maps.push(e.P.slice());
+  }
+  // expected count ≈ 1300 → σ ≈ 2.8 %
+  for (const type of ['CA', 'GO', 'SO', 'OS'] as CfarType[]) {
+    it(`${type}-CFAR Pfa within ±10 % of ${pfa}`, () => {
+      expect(e.d.nVirt).toBe(4);
+      const c = new Cfar2D(cfg.nSamples, cfg.nChirps, cf, 4);
+      let det = 0,
+        cells = 0;
+      for (const P of maps) {
+        det += c.run(P, type, true).count;
+        cells += P.length;
+      }
+      expect(Math.abs(det / cells / pfa - 1)).toBeLessThan(0.1);
     });
   }
 });

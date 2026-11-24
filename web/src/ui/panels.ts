@@ -421,6 +421,7 @@ export class CutPanel extends CanvasPanel {
     c.textAlign = 'right';
     c.textBaseline = 'top';
     c.fillText(t('cutAt', { d: f.meta.cutBin, v: ((f.meta.cutBin - f.meta.M / 2) * d.dv).toFixed(2) }), rect.x + rect.w - 4, rect.y + rect.h - 14);
+    c.fillText(t('cutGamma', { k: String(d.nVirt) }), rect.x + rect.w - 4, rect.y + 4);
   }
   protected hover(p: { x: number; y: number }): void {
     const f = this.app.frame();
@@ -429,7 +430,8 @@ export class CutPanel extends CanvasPanel {
     const r = Math.max(0, Math.min(f.meta.nR - 1, Math.round(a.ix(p.x) / f.d.rangeRes)));
     const nR = f.meta.nR;
     const T = f.bufs.cutThrDb;
-    this.setReadout(`R = ${(r * f.d.rangeRes).toFixed(2)} m · P ${f.bufs.cutDb[r].toFixed(1)} · CA ${T[r].toFixed(1)} · OS ${T[3 * nR + r].toFixed(1)} dB`);
+    const th = ['CA', 'GO', 'SO', 'OS'].map((ty, i) => `${ty} ${T[i * nR + r].toFixed(1)}`).join(' · ');
+    this.setReadout(`R = ${(r * f.d.rangeRes).toFixed(2)} m · P ${f.bufs.cutDb[r].toFixed(1)} · ${th} dB`);
   }
 }
 

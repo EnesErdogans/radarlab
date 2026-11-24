@@ -48,6 +48,7 @@ const en: Dict = {
   noSel: 'Select a target (click in the bird’s-eye view or the target list).',
   cutAt: 'Doppler bin {d} (v = {v} m/s) — click the RD map to choose',
   active: 'active',
+  cutGamma: 'all α exact for Gamma(K = {k}) noise',
   rangeRes: 'Range resolution ΔR',
   rMax: 'Max range R_max',
   vRes: 'Velocity resolution Δv',
@@ -164,6 +165,7 @@ const tr: Dict = {
   noSel: 'Bir hedef seçin (kuşbakışı görünümde veya hedef listesinde tıklayın).',
   cutAt: 'Doppler hücresi {d} (v = {v} m/s) — seçmek için RD haritasına tıklayın',
   active: 'etkin',
+  cutGamma: 'tüm α değerleri Gamma(K = {k}) gürültü için tam',
   rangeRes: 'Menzil çözünürlüğü ΔR',
   rMax: 'Azami menzil R_max',
   vRes: 'Hız çözünürlüğü Δv',
@@ -317,11 +319,11 @@ export const LEARN: LearnStep[] = [
       en: `<p>A <b>constant false-alarm rate</b> detector estimates the local noise from N training cells around each cell under test (guard cells excluded) and declares a detection if P &gt; α·noise:</p>
 <div class="eq">CA: α = N·(P<sub>fa</sub><sup>−1/N</sup> − 1)</div>
 <div class="eq">OS: P<sub>fa</sub> = Π<sub>i=0..k−1</sub> (N−i)/(N−i+α),&nbsp; k = round(rank·N)</div>
-<p>GO/SO take the greater/smaller mean of the leading and lagging halves. This cut shows power along range at one Doppler bin with all four thresholds: CA is masked by a strong neighbour, OS is robust to it. Summing K channels makes the noise Gamma(K): CA uses the exact Gamma(K) α (hence its lower threshold here), while GO/SO/OS use the single-channel formulas and are therefore conservative.</p>`,
+<p>GO/SO take the greater/smaller mean of the leading and lagging halves. This cut shows power along range at one Doppler bin with all four thresholds: CA is masked by a strong neighbour, OS is robust to it. Summing K channels makes the noise Gamma(K), so the formulas above (valid for K = 1) are replaced by the exact Gamma(K) values: CA in closed form (Beta distribution), OS/GO/SO by numerical integration. All four thresholds therefore hold the same design P<sub>fa</sub>, and their differences in this cut come only from how each one estimates the noise. The detection SNR is P divided by the noise estimate of the active type (threshold/α).</p>`,
       tr: `<p><b>Sabit yanlış alarm oranlı</b> (CFAR) dedektör, test edilen her hücrenin çevresindeki N eğitim hücresinden (koruma hücreleri hariç) yerel gürültüyü kestirir ve P &gt; α·gürültü ise tespit bildirir:</p>
 <div class="eq">CA: α = N·(P<sub>fa</sub><sup>−1/N</sup> − 1)</div>
 <div class="eq">OS: P<sub>fa</sub> = Π<sub>i=0..k−1</sub> (N−i)/(N−i+α),&nbsp; k = round(rank·N)</div>
-<p>GO/SO, öncü ve artçı yarıların büyük/küçük ortalamasını alır. Bu kesit bir Doppler hücresinde menzil boyunca gücü ve dört eşiği gösterir: CA güçlü bir komşu tarafından maskelenir, OS buna dayanıklıdır. K kanal toplanınca gürültü Gamma(K) olur: CA tam Gamma(K) α’sını kullanır (bu yüzden eşiği burada daha düşüktür); GO/SO/OS tek kanal formüllerini kullandığından ihtiyatlıdır.</p>`,
+<p>GO/SO, öncü ve artçı yarıların büyük/küçük ortalamasını alır. Bu kesit bir Doppler hücresinde menzil boyunca gücü ve dört eşiği gösterir: CA güçlü bir komşu tarafından maskelenir, OS buna dayanıklıdır. K kanal toplanınca gürültü Gamma(K) olur; bu yüzden yukarıdaki formüller (K = 1 için geçerli) yerine tam Gamma(K) değerleri kullanılır: CA kapalı biçimde (Beta dağılımı), OS/GO/SO sayısal integralle. Böylece dört eşiğin hepsi aynı tasarım P<sub>fa</sub> değerini tutar; bu kesitteki farklar yalnızca her birinin gürültüyü nasıl kestirdiğinden gelir. Tespit SNR’si, P’nin etkin türün gürültü kestirimine (eşik/α) bölümüdür.</p>`,
     },
   },
   {

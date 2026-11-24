@@ -1,9 +1,12 @@
 // 2D CFAR on the square-law range-Doppler power map P[r·M + d].
 // Doppler axis is circular, range axis is clipped (α recomputed for the actual
-// number of training cells). α formulas assume exponential (K=1) noise; see
-// caAlphaGamma for the Gamma(K) exact variant (non-coherent sum of K channels).
+// number of training cells). With K non-coherently summed channels the noise is
+// Gamma(K): α is exact for every type (brief rev. 1, same definitions as the
+// Python reference): CA closed form (caAlphaGamma), OS/GO/SO by quadrature
+// (osAlphaGamma, gsAlphaGamma; see gamma.ts). K = 1 uses the closed forms.
 
 import type { CfarParams, CfarType } from '../config/radar';
+import { gsLogPfaGamma, osLogPfaGamma, solveAlpha } from './gamma';
 
 /** CA-CFAR: threshold = α · mean(training). Pfa = (1 + α/N)^(−N). */
 export function caAlpha(n: number, pfa: number): number {
@@ -75,6 +78,49 @@ export function caAlphaGamma(n: number, K: number, pfa: number): number {
   return bisect((a) => caPfaGamma(n, K, a), pfa);
 }
 
+/** OS-CFAR α (threshold α·X_(k)) for Gamma(K) cells; exact (quadrature for K > 1). */
+export function osAlphaGamma(n: number, k: number, K: number, pfa: number): number {
+  if (K <= 1) return osAlpha(n, k, pfa);
+  return solveAlpha((a) => osLogPfaGamma(n, k, K, a), pfa);
+}
+/** Exact OS-CFAR Pfa for Gamma(K) cells. */
+export function osPfaGamma(n: number, k: number, K: number, alpha: number): number {
+  return K <= 1 ? osPfa(n, k, alpha) : Math.exp(osLogPfaGamma(n, k, K, alpha));
+}
+
+/**
+ * GO/SO-CFAR α on the *mean* of a half with nHalf cells (α = nHalf·β) for Gamma(K) cells;
+ * exact (closed form for K = 1, quadrature for K > 1).
+ */
+export function gsAlphaGamma(nHalf: number, K: number, pfa: number, kind: 'GO' | 'SO'): number {
+  if (K <= 1) return kind === 'GO' ? goAlpha(nHalf, pfa) : soAlpha(nHalf, pfa);
+  return nHalf * solveAlpha((b) => gsLogPfaGamma(nHalf, K, b, kind), pfa);
+}
+/** Exact GO/SO Pfa for threshold α·max/min(mean₁, mean₂) of two halves of nHalf Gamma(K) cells. */
+export function gsPfaGamma(nHalf: number, K: number, alpha: number, kind: 'GO' | 'SO'): number {
+  if (K <= 1) return kind === 'GO' ? goPfa(nHalf, alpha) : soPfa(nHalf, alpha);
+  return Math.exp(gsLogPfaGamma(nHalf, K, alpha / nHalf, kind));
+}
+
+// process-wide α cache: the quadrature solve takes a few ms, engines are rebuilt on every
+// parameter change, and edge cells need one α per distinct training-cell count
+const ALPHA_CACHE = new Map<string, number>();
+
+/** α for a CFAR type with n training cells (GO/SO: n = cells per half; OS: rank k), K channels. */
+export function cfarAlpha(type: CfarType, n: number, pfa: number, K = 1, k = 0): number {
+  const key = `${type}|${n}|${k}|${K}|${pfa}`;
+  let a = ALPHA_CACHE.get(key);
+  if (a === undefined) {
+    if (n <= 0) a = Infinity;
+    else if (type === 'CA') a = K > 1 ? caAlphaGamma(n, K, pfa) : caAlpha(n, pfa);
+    else if (type === 'OS') a = osAlphaGamma(n, k, K, pfa);
+    else a = gsAlphaGamma(n, K, pfa, type);
+    if (ALPHA_CACHE.size > 20000) ALPHA_CACHE.clear();
+    ALPHA_CACHE.set(key, a);
+  }
+  return a;
+}
+
 /** round(x) with ties to even (numpy.round), used for the OS rank k = round(rank·N). */
 export function roundHalfEven(x: number): number {
   const f = Math.floor(x),
@@ -117,27 +163,17 @@ export function quickselect(a: Float64Array, n: number, k: number): number {
   return a[k];
 }
 
+/** α lookup bound to one parameter set and K (Gamma(K)-exact for all four types). */
 export class AlphaCache {
-  private m = new Map<string, number>();
-  constructor(private p: CfarParams, private gammaK = 1) {}
-  get(type: CfarType | 'CA1', n: number, k = 0): number {
-    const key = `${type}|${n}|${k}`;
-    let a = this.m.get(key);
-    if (a === undefined) {
-      const pfa = this.p.pfa;
-      if (type === 'CA') a = this.gammaK > 1 ? caAlphaGamma(n, this.gammaK, pfa) : caAlpha(n, pfa);
-      else if (type === 'CA1') a = caAlpha(n, pfa);
-      else if (type === 'GO') a = goAlpha(n, pfa);
-      else if (type === 'SO') a = soAlpha(n, pfa);
-      else a = osAlpha(n, k, pfa);
-      this.m.set(key, a);
-    }
-    return a;
+  constructor(private p: CfarParams, readonly gammaK = 1) {}
+  get(type: CfarType, n: number, k = 0): number {
+    return cfarAlpha(type, n, this.p.pfa, this.gammaK, k);
   }
 }
 
 export interface CfarOutput {
   thr: Float64Array; // threshold per cell (NaN where skipped by prefilter)
+  noise: Float64Array; // noise statistic per cell = thr/α of the active type (training mean, GO/SO half mean, OS k-th value)
   mask: Uint8Array; // 1 = detection
   count: number;
 }
@@ -164,7 +200,7 @@ export class Cfar2D {
     this.sat = new Float64Array(0);
     this.buf = new Float64Array(4096);
     this.tmp = new Float64Array(nR * M);
-    this.out = { thr: new Float64Array(nR * M), mask: new Uint8Array(nR * M), count: 0 };
+    this.out = { thr: new Float64Array(nR * M), noise: new Float64Array(nR * M), mask: new Uint8Array(nR * M), count: 0 };
   }
 
   private buildSat(P: Float64Array, wd: number): void {
@@ -201,7 +237,7 @@ export class Cfar2D {
     const p = this.params;
     const nR = this.nR,
       M = this.M;
-    const { thr, mask } = this.out;
+    const { thr, mask, noise } = this.out;
     mask.fill(0);
     let count = 0;
     const wr = p.guardR + p.trainR,
@@ -220,12 +256,13 @@ export class Cfar2D {
         g1 = Math.min(nR - 1, r + p.guardR);
       for (let d = 0; d < M; d++) {
         const dc = d + wd;
-        let t: number;
+        let t: number, z: number;
         if (type === 'CA') {
           const outer = this.rect(r0, r1, dc - wd, dc + wd);
           const inner = this.rect(g0, g1, dc - gd, dc + gd);
           const n = (r1 - r0 + 1) * (2 * wd + 1) - (g1 - g0 + 1) * (2 * gd + 1);
-          t = n > 0 ? (this.alphas.get('CA', n) * (outer - inner)) / n : Infinity;
+          z = n > 0 ? (outer - inner) / n : 0;
+          t = n > 0 ? this.alphas.get('CA', n) * z : Infinity;
         } else {
           // halves: lead = Δr<0 or (Δr=0, Δd<0); lag = Δr>0 or (Δr=0, Δd>0) (training cells only)
           let sLead = 0,
@@ -259,15 +296,20 @@ export class Cfar2D {
           }
           const nTr = nLead + nLag;
           const nMin = Math.min(nLead, nLag);
-          if (nMin < nTr / 4) t = nTr > 0 ? (this.alphas.get('CA1', nTr) * (sLead + sLag)) / nTr : Infinity;
-          else {
+          // GO/SO → CA fallback when one half has < 1/4 of the cells (range edges); Gamma(K) CA α as in Python
+          if (nMin < nTr / 4) {
+            z = nTr > 0 ? (sLead + sLag) / nTr : 0;
+            t = nTr > 0 ? this.alphas.get('CA', nTr) * z : Infinity;
+          } else {
             const mLead = sLead / nLead,
               mLag = sLag / nLag;
-            t = this.alphas.get(type, nMin) * (type === 'GO' ? Math.max(mLead, mLag) : Math.min(mLead, mLag));
+            z = type === 'GO' ? Math.max(mLead, mLag) : Math.min(mLead, mLag);
+            t = this.alphas.get(type, nMin) * z;
           }
         }
         const i = r * M + d;
         thr[i] = t;
+        noise[i] = z;
         if (P[i] > t) {
           mask[i] = 1;
           count++;
@@ -282,7 +324,7 @@ export class Cfar2D {
     const p = this.params;
     const nR = this.nR,
       M = this.M;
-    const { thr, mask } = this.out;
+    const { thr, mask, noise } = this.out;
     const wr = p.guardR + p.trainR,
       wd = Math.min(p.guardD + p.trainD, (M - 1) >> 1);
     const gd = Math.min(p.guardD, wd);
@@ -307,6 +349,7 @@ export class Cfar2D {
         const i = r * M + d;
         if (P[i] <= skip) {
           thr[i] = NaN;
+          noise[i] = NaN;
           continue;
         }
         let n = 0;
@@ -325,6 +368,7 @@ export class Cfar2D {
         const xk = quickselect(buf, n, k - 1);
         const t = this.alphas.get('OS', n, k) * xk;
         thr[i] = t;
+        noise[i] = xk;
         if (P[i] > t) {
           mask[i] = 1;
           count++;
@@ -382,7 +426,7 @@ export class Cfar2D {
           const k = osRankIndex(n, p.osRank);
           t = this.alphas.get('OS', n, k) * quickselect(buf, n, k - 1);
         } else if (Math.min(nLead, nLag) < n / 4) {
-          t = (this.alphas.get('CA1', n) * sum) / n;
+          t = (this.alphas.get('CA', n) * sum) / n;
         } else {
           const nn = Math.min(nLead, nLag);
           const a = sLead / nLead,

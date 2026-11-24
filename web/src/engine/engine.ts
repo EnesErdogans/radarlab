@@ -3,7 +3,7 @@
 import { derive, type Derived, type RadarConfig, type SimSettings } from '../config/radar';
 import { getFFT, type FFT } from '../dsp/fft';
 import { makeNormWindow } from '../dsp/window';
-import { AlphaCache, Cfar2D } from '../dsp/cfar';
+import { Cfar2D } from '../dsp/cfar';
 import { Detector, type Detection } from '../dsp/detect';
 import { Spectrogram } from '../dsp/spectrogram';
 import { Synthesizer, type PointScatterer } from '../sim/synth';
@@ -119,7 +119,6 @@ export class Engine {
   private seqRe: Float64Array;
   private seqIm: Float64Array;
   private cutThr: Float64Array;
-  private noiseAlpha: number;
   timings: Record<Stage, number>;
 
   constructor(cfg: RadarConfig, s: SimSettings, targets: Target[]) {
@@ -142,7 +141,7 @@ export class Engine {
     this.P = new Float64Array(nR * M);
     this.rangeP = new Float64Array(nR);
     this.raP = new Float64Array(nR * this.A);
-    // brief rev. 1: CA α is Gamma(K)-exact for K non-coherently summed channels
+    // brief rev. 1: α is Gamma(K)-exact (all four CFAR types) for K non-coherently summed channels
     this.cfar = new Cfar2D(nR, M, s.cfar, d.nVirt);
     this.det = new Detector(cfg, d, this.A, s.maxDetections);
     this.tracker = new Tracker({
@@ -159,10 +158,6 @@ export class Engine {
     this.seqRe = new Float64Array(M);
     this.seqIm = new Float64Array(M);
     this.cutThr = new Float64Array(4 * nR);
-    const wr = s.cfar.guardR + s.cfar.trainR,
-      wd = s.cfar.guardD + s.cfar.trainD;
-    const nTrain = (2 * wr + 1) * (2 * wd + 1) - (2 * s.cfar.guardR + 1) * (2 * s.cfar.guardD + 1);
-    this.noiseAlpha = new AlphaCache(s.cfar, d.nVirt).get('CA', nTrain);
     this.timings = Object.fromEntries(STAGES.map((k) => [k, 0])) as Record<Stage, number>;
   }
 
@@ -321,7 +316,7 @@ export class Engine {
     let t1 = now();
     this.timings.cfar = t1 - t0;
 
-    this.det.cluster(this.P, cf.mask, cf.thr, this.noiseAlpha);
+    this.det.cluster(this.P, cf.mask, cf.noise);
     this.det.estimateAngles(this.rdRe, this.rdIm);
     t0 = now();
     this.timings.cluster = t0 - t1;

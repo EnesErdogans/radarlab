@@ -13,7 +13,7 @@ export interface Detection {
   range: number;
   velocity: number;
   power: number; // linear peak power
-  snrDb: number; // peak power / threshold·α⁻¹ (≈ local noise) in dB
+  snrDb: number; // peak power / CFAR noise statistic (threshold / α of the active CFAR type) in dB
   angleBin: number; // interpolated, fftshifted (A/2 = boresight)
   angleDeg: number;
   x: number;
@@ -80,7 +80,7 @@ export class Detector {
   }
 
   /** Cluster CFAR mask into detections (peak + interpolation). */
-  cluster(P: Float64Array, mask: Uint8Array, thr: Float64Array, noiseAlpha: number): number {
+  cluster(P: Float64Array, mask: Uint8Array, noiseStat: Float64Array): number {
     const nR = this.nR,
       M = this.M;
     const vis = this.visited;
@@ -137,7 +137,7 @@ export class Detector {
       det.dFrac = dB + doff;
       det.range = det.rFrac * this.d.rangeRes;
       det.velocity = (det.dFrac - M / 2) * this.d.dv;
-      const noise = thr[best] / noiseAlpha;
+      const noise = noiseStat[best];
       det.snrDb = 10 * Math.log10(bestP / (noise > 0 ? noise : 1e-30));
     }
     this.count = nd;
