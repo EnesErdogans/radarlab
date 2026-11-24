@@ -8,7 +8,7 @@
 
 import { C0, type Derived, type RadarConfig, type SimSettings } from '../config/radar';
 import { STRIDE, evalTarget, scattererCount, type Target } from './targets';
-import { Gaussian, GaussianPool, hashSeed, mulberry32 } from './rng';
+import { Gaussian, NoisePool, hashSeed, mulberry32 } from './rng';
 
 const TWO_PI = 2 * Math.PI;
 
@@ -46,7 +46,7 @@ export class Synthesizer {
   private cr: Float64Array;
   private ci: Float64Array;
   private bases: Int32Array;
-  private pool: GaussianPool | null = null;
+  private pool: NoisePool | null = null;
   private poolSeed = -1;
   private clutterRe: Float64Array | null = null; // K×N static clutter (identical for all chirps)
   private clutterIm: Float64Array | null = null;
@@ -265,17 +265,11 @@ export class Synthesizer {
       }
       return;
     }
-    if (!this.pool || this.poolSeed !== s.seed) {
-      this.pool = new GaussianPool(s.seed);
+    // UI: block-permuted, randomly phase-rotated pool with rolling refill (see NoisePool)
+    if (!this.pool || this.poolSeed !== s.seed || this.pool.size < Math.min(2 * len, 1 << 23)) {
+      this.pool = new NoisePool(hashSeed(s.seed, 0x5eed), 2 * len);
       this.poolSeed = s.seed;
     }
-    const pool = this.pool.pool,
-      mask = this.pool.mask;
-    let o = this.pool.randomOffset();
-    for (let i = 0; i < len; i++) {
-      re[i] += sc * pool[o & mask];
-      im[i] += real ? 0 : sc * pool[(o + 1) & mask];
-      o += 2;
-    }
+    this.pool.addTo(re, im, len, sc, real);
   }
 }
