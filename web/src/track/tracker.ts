@@ -33,6 +33,7 @@ export interface TrackerParams {
   maxMissConfirmed: number;
   vMax: number; // unambiguous velocity (for wrapped Doppler innovation); 0 = no wrap
   histLen: number;
+  spawnSuppress: number; // no new track within this distance [m] of an existing one (extended targets)
 }
 
 export function defaultTrackerParams(): TrackerParams {
@@ -47,6 +48,7 @@ export function defaultTrackerParams(): TrackerParams {
     maxMissConfirmed: 5,
     vMax: 0,
     histLen: 40,
+    spawnSuppress: 3.5,
   };
 }
 
@@ -304,7 +306,20 @@ export class Tracker {
       if (tr.hist.length > 2 * p.histLen) tr.hist.splice(0, tr.hist.length - 2 * p.histLen);
     }
     this.tracks = this.tracks.filter((t) => t.misses <= (t.confirmed ? p.maxMissConfirmed : p.maxMissTentative));
-    for (let j = 0; j < nM; j++) if (!used[j]) this.spawn(meas[j]);
+    for (let j = 0; j < nM; j++) {
+      if (used[j]) continue;
+      const z = meas[j];
+      const zx = z.range * Math.sin(z.az),
+        zy = z.range * Math.cos(z.az);
+      let near = false;
+      for (const tr of this.tracks) {
+        if (Math.hypot(tr.s[0] - zx, tr.s[1] - zy) < p.spawnSuppress) {
+          near = true;
+          break;
+        }
+      }
+      if (!near) this.spawn(z);
+    }
   }
 }
 
@@ -329,37 +344,51 @@ function inv3(m: Float64Array): Float64Array {
 }
 
 /**
- * Merge raw detections into one measurement per object: greedy, strongest first,
- * joining detections within `dist` metres and `dv` m/s.
+ * Merge raw detections into one measurement per object: single-linkage (DBSCAN,
+ * minPts = 1) clustering in the x-y plane with radius `eps` [m]. Velocity is the
+ * power-weighted mean, so micro-Doppler parts (wheels, limbs) follow the body.
+ * Detections whose velocity differs by more than `dvMax` from the cluster seed
+ * are kept separate (e.g. a pedestrian next to a car).
  */
 export function mergeDetections(
   dets: { x: number; y: number; velocity: number; power: number }[],
   n: number,
-  dist = 2.5,
-  dv = 2.0,
+  eps = 2.0,
+  dvMax = 8,
 ): Measurement[] {
-  const idx = Array.from({ length: n }, (_, i) => i).sort((a, b) => dets[b].power - dets[a].power);
-  const used = new Uint8Array(n);
+  const label = new Int32Array(n).fill(-1);
+  const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => dets[b].power - dets[a].power);
+  const queue = new Int32Array(n);
   const out: Measurement[] = [];
-  for (const i of idx) {
-    if (used[i]) continue;
-    used[i] = 1;
-    const s = dets[i];
-    let wx = s.x * s.power,
-      wy = s.y * s.power,
-      wv = s.velocity * s.power,
-      w = s.power;
-    for (const j of idx) {
-      if (used[j]) continue;
-      const o = dets[j];
-      if (Math.hypot(o.x - s.x, o.y - s.y) < dist && Math.abs(o.velocity - s.velocity) < dv) {
-        used[j] = 1;
-        wx += o.x * o.power;
-        wy += o.y * o.power;
-        wv += o.velocity * o.power;
-        w += o.power;
+  let nc = 0;
+  for (const i0 of order) {
+    if (label[i0] >= 0) continue;
+    let qh = 0,
+      qt = 0;
+    queue[qt++] = i0;
+    label[i0] = nc;
+    const v0 = dets[i0].velocity;
+    let wx = 0,
+      wy = 0,
+      wv = 0,
+      w = 0;
+    while (qh < qt) {
+      const i = queue[qh++];
+      const s = dets[i];
+      wx += s.x * s.power;
+      wy += s.y * s.power;
+      wv += s.velocity * s.power;
+      w += s.power;
+      for (let j = 0; j < n; j++) {
+        if (label[j] >= 0) continue;
+        const o = dets[j];
+        if (Math.hypot(o.x - s.x, o.y - s.y) < eps && Math.abs(o.velocity - v0) < dvMax) {
+          label[j] = nc;
+          queue[qt++] = j;
+        }
       }
     }
+    nc++;
     const x = wx / w,
       y = wy / w;
     out.push({ range: Math.hypot(x, y), az: Math.atan2(x, y), vr: wv / w, power: w });

@@ -44,7 +44,7 @@ export function scattererCount(t: Target): number {
     case 'point':
       return 1;
     case 'car':
-      return 11;
+      return 13;
     case 'pedestrian':
       return 6;
     case 'drone':
@@ -57,9 +57,11 @@ export function scattererCount(t: Target): number {
 // Car body points in local (forward, right) coordinates [m] + RCS weights.
 const CAR_BODY: [number, number, number, number][] = [
   // fwd, right, up(rel. center), weight
-  [2.25, 0, 0.0, 0.25],
-  [2.05, -0.8, 0.0, 0.12],
-  [2.05, 0.8, 0.0, 0.12],
+  [2.25, 0, 0.0, 0.21],
+  [2.05, -0.8, 0.0, 0.1],
+  [2.05, 0.8, 0.0, 0.1],
+  [0.0, -0.9, 0.0, 0.04], // side panels / mirrors
+  [0.0, 0.9, 0.0, 0.04],
   [-2.2, -0.8, 0.1, 0.12],
   [-2.2, 0.8, 0.1, 0.12],
   [-2.3, 0, 0.2, 0.15],
@@ -125,7 +127,7 @@ export function evalTarget(tg: Target, t: number, out: Float64Array, off: number
           hz = bz - 0.15;
         // offset = R(ca·f + sa·z); d/dt = R·(-om)(-sa·f + ca·z)
         const dv = -om * WHEEL_R;
-        put(hx + WHEEL_R * ca * fx, hy + WHEEL_R * ca * fy, hz + WHEEL_R * sa, tg.vx - dv * sa * fx, tg.vy - dv * sa * fy, tg.vz + dv * ca, tg.rcs * 0.02, i * 2.1);
+        put(hx + WHEEL_R * ca * fx, hy + WHEEL_R * ca * fy, hz + WHEEL_R * sa, tg.vx - dv * sa * fx, tg.vy - dv * sa * fy, tg.vz + dv * ca, tg.rcs * 0.01, i * 2.1);
       }
       break;
     }
