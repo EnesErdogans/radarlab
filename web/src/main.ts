@@ -8,7 +8,7 @@ import { LEARN, applyI18n, getLang, setLang, t, type Lang } from './ui/i18n';
 import type { CmapName } from './ui/colormap';
 import { BevPanel, BudgetPanel, ChirpPanel, CutPanel, MicroPanel, RAPanel, RDPanel, RangePanel, type AppApi, type Frame, type Panel } from './ui/panels';
 
-const GITHUB_URL = 'https://github.com/'; // placeholder — set to the repository URL
+const GITHUB_URL = 'https://github.com/EnesErdogans/radarlab';
 
 // ------------------------------------------------------------------ state
 interface State {
