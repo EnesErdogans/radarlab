@@ -149,7 +149,7 @@ def ml_tone_3d(x: np.ndarray, pad: int = 4, n_iter: int = 3) -> np.ndarray:
     import scipy.optimize as so
 
     K, M, N = x.shape
-    F = np.abs(np.fft.fftn(x, s=(pad * K, pad * M, pad * N))) ** 2
+    F = np.abs(np.fft.fftn(x, s=(pad * K, pad * M, pad * N), axes=(0, 1, 2))) ** 2
     i = np.unravel_index(int(np.argmax(F)), F.shape)
     w = np.array([2 * np.pi * i[a] / F.shape[a] for a in range(3)])
     w = (w + np.pi) % (2 * np.pi) - np.pi
