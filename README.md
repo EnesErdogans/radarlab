@@ -474,6 +474,25 @@ print(res.points[["range", "velocity", "azimuth", "snr_db"]])   # azimuth in rad
 
 Two practical points. First, the IQ order depends on the IQ-swap setting of mmWave Studio; check it with a corner reflector at a known range (the correct order gives one peak at the positive range bin, the wrong order mirrors it). Second, check the sign of the angle axis with a corner reflector at a known azimuth, because board antenna ordering can flip it. Public DCA1000 datasets such as RaDICaL [35] and ColoRadar [36] can be used in the same way.
 
+**Validation on public real data.** `radarlab.io.uw_mat.load_uw_mat` reads the University of Washington AWR1843 template captures (Gao et al., Asilomar 2019; MIT licence): pedestrian, cyclist and parked car, 30 frames each. It returns (F, K, M, N) cubes and a `RadarConfig` built from the published configuration (77 GHz, 21.0017 MHz/µs, 4 Msps, 128 samples, 255 loops, TX0/TX2 TDM, 120 µs per TX cycle). The TX order, TX spacing and I/Q sign were checked on the data itself. The ADC start time is not published, and to first order it cannot be observed from the data.
+
+The unchanged processing chain runs on the real frames (`python/examples/real_data/`). Away from zero Doppler, the real range–Doppler noise follows a Gamma(8) distribution (KS p 0.17–0.28). The CA-CFAR with exact α gives 1.12–1.18× the nominal false-alarm rate at Pfa 1e-3, against 1.09–1.14× for simulated noise.
+
+The simulated counterparts have their trajectory, amplitude and noise fitted to the data. They reproduce the dominant target within 0.2 m, 0.08 m/s and 1°. Switching on the IF high-pass, DC offset, static clutter and a measured channel gain/phase mismatch brings the simulation close to the real data:
+
+- noise-floor shape error: 2.4 → 1.0 dB;
+- zero-Doppler detections: 1.6 → 8.4 per frame (real: 9.6);
+- array coherence: 1.00 → 0.93 (real: 0.92).
+
+The simulation does not yet reproduce:
+
+- the DC/leakage Doppler skirt (7.3 near-DC false alarms per frame);
+- aliased far clutter;
+- the strong RCS fluctuation of the pedestrian;
+- the micro-Doppler of a very slow walker and of a cyclist starting from rest (limb Doppler extent off by about ±60 %).
+
+Details and limitations (only 1 s per scene, no ground truth, fits made on the same data) are in [`docs/real_data/report.md`](docs/real_data/report.md).
+
 ---
 
 ## 9 Getting started

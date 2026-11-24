@@ -10,7 +10,7 @@ Each scheduled session: clone the repo, read `docs/PROJECT_BRIEF.md`, this file,
 - [ ] A5 Web perf: measure synthesis; try WebAssembly (AssemblyScript or Rust→wasm SIMD) for synthesis + FFT; keep TS fallback; target ≥30 fps automotive.
 
 ## Phase B — real data
-- [ ] B1 Sim-vs-real on UW AWR1843 pedestrian/cyclist/car captures (`docs/real_data/candidates.md`): `docs/real_data/report.md` with quantitative comparison and figures.
+- [x] B1 Sim-vs-real on UW AWR1843 pedestrian/cyclist/car captures (`docs/real_data/candidates.md`): `docs/real_data/report.md` with quantitative comparison and figures.
 - [ ] B2 Browser: upload a DCA1000 `.bin` + `.cfg` (or the UW `.mat`) and run the same chain on real data.
 - [ ] B3 Calibration utilities: range bias, per-channel phase/gain calibration from a corner-reflector capture (+ synthetic test).
 - [ ] B4 [needs user hardware] Own trihedral corner-reflector + drone captures with an AWR1843/IWR6843 (procedure doc in docs/real_data/capture_protocol.md).
@@ -23,3 +23,8 @@ Each scheduled session: clone the repo, read `docs/PROJECT_BRIEF.md`, this file,
 ## Phase D — polish
 - [ ] D1 Docs site pages (usage tutorials, Learn mode content review TR/EN).
 - [ ] D2 Release v0.1.0 (tag, changelog, PyPI-ready packaging check without publishing).
+
+## Phase E — real-data follow-ups (from docs/real_data/report.md §7)
+- [ ] E1 Impairments: `dc_offset`, `channel_gain` (+ calibration from a static target), slow random DC walk / 1/f IF noise (DC Doppler skirt), IF anti-alias LPF with oversampled synthesis (aliased far clutter), IQ-specific (asymmetric) HPF.
+- [ ] E2 Target models: speed-dependent gait swing amplitude; proper cyclist model; fit Swerling for human RCS fluctuation.
+- [ ] E3 Re-run the UW comparison with E1/E2 and update the report table.
