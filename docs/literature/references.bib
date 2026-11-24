@@ -1,0 +1,686 @@
+% RadarLab literature review — references
+% Verified = title/venue/year (and DOI where given) checked on a web page during the
+% review (Nov 2026). Entries or fields not checked carry note = {unverified ...}.
+
+%% ---------------- Fundamentals / tutorials ----------------
+@article{patole2017automotive,
+  author  = {Patole, Sujeet Milind and Torlak, Murat and Wang, Dan and Ali, Murtaza},
+  title   = {Automotive Radars: A Review of Signal Processing Techniques},
+  journal = {IEEE Signal Processing Magazine},
+  volume  = {34},
+  number  = {2},
+  pages   = {22--35},
+  year    = {2017},
+  doi     = {10.1109/MSP.2016.2628914},
+  note    = {author first names and issue number from memory; title/vol/pages/year/DOI verified}
+}
+
+@article{engels2017advances,
+  author  = {Engels, Florian and Heidenreich, Philipp and Zoubir, Abdelhak M. and Jondral, Friedrich K. and Wintermantel, Markus},
+  title   = {Advances in Automotive Radar: A Framework on Computationally Efficient High-Resolution Frequency Estimation},
+  journal = {IEEE Signal Processing Magazine},
+  volume  = {34},
+  number  = {2},
+  pages   = {36--46},
+  year    = {2017},
+  doi     = {10.1109/MSP.2016.2637700}
+}
+
+@article{sun2020mimo,
+  author  = {Sun, Shunqiao and Petropulu, Athina P. and Poor, H. Vincent},
+  title   = {{MIMO} Radar for Advanced Driver-Assistance Systems and Autonomous Driving: Advantages and Challenges},
+  journal = {IEEE Signal Processing Magazine},
+  volume  = {37},
+  number  = {4},
+  pages   = {98--117},
+  year    = {2020},
+  doi     = {10.1109/MSP.2020.2978507}
+}
+
+@article{engels2021automotive,
+  author  = {Engels, Florian and Heidenreich, Philipp and Wintermantel, Markus and St{\"a}cker, Lukas and Al Kadi, Muhammed and Zoubir, Abdelhak M.},
+  title   = {Automotive Radar Signal Processing: Research Directions and Practical Challenges},
+  journal = {IEEE Journal of Selected Topics in Signal Processing},
+  volume  = {15},
+  number  = {4},
+  year    = {2021},
+  note    = {pages and DOI unverified (IEEE Xplore doc. 9369027)}
+}
+
+@inproceedings{winkler2007range,
+  author    = {Winkler, Volker},
+  title     = {Range {Doppler} Detection for Automotive {FMCW} Radars},
+  booktitle = {Proc. European Radar Conference (EuRAD)},
+  year      = {2007},
+  note      = {unverified: pages, DOI (record located on scilit but not readable)}
+}
+
+@book{richards2014fundamentals,
+  author    = {Richards, Mark A.},
+  title     = {Fundamentals of Radar Signal Processing},
+  edition   = {2nd},
+  publisher = {McGraw-Hill Education},
+  year      = {2014},
+  isbn      = {978-0-07-179832-7}
+}
+
+@book{kay1993fundamentals,
+  author    = {Kay, Steven M.},
+  title     = {Fundamentals of Statistical Signal Processing, Volume I: Estimation Theory},
+  publisher = {Prentice Hall},
+  year      = {1993},
+  note      = {unverified (from memory)}
+}
+
+@book{barshalom2001estimation,
+  author    = {Bar-Shalom, Yaakov and Li, X. Rong and Kirubarajan, Thiagalingam},
+  title     = {Estimation with Applications to Tracking and Navigation},
+  publisher = {Wiley},
+  year      = {2001},
+  note      = {unverified (from memory)}
+}
+
+@techreport{ti_spyy005,
+  author      = {Iovescu, Cesar and Rao, Sandeep},
+  title       = {The Fundamentals of Millimeter Wave Sensors},
+  institution = {Texas Instruments},
+  number      = {SPYY005},
+  year        = {2017},
+  url         = {https://www.ti.com/lit/spyy005},
+  note        = {document number seen in search; authors/year unverified}
+}
+
+@techreport{ti_swra554,
+  author      = {Rao, Sandeep},
+  title       = {{MIMO} Radar},
+  institution = {Texas Instruments},
+  type        = {Application Report},
+  number      = {SWRA554A},
+  year        = {2018},
+  month       = jul,
+  url         = {https://www.ti.com/lit/swra554},
+  note        = {May 2017, revised July 2018}
+}
+
+@techreport{ti_swra581,
+  author      = {{Texas Instruments}},
+  title       = {Mmwave Radar Device {ADC} Raw Data Capture},
+  institution = {Texas Instruments},
+  type        = {Application Report},
+  number      = {SWRA581B},
+  year        = {2018},
+  month       = oct,
+  url         = {https://www.ti.com/lit/swra581}
+}
+
+@manual{ti_mmwave_sdk_ug,
+  author       = {{Texas Instruments}},
+  title        = {mmWave {SDK} User Guide, Product Release 3.2.0 ({AOP})},
+  organization = {Texas Instruments},
+  year         = {2019},
+  url          = {https://software-dl.ti.com/ra-processors/esd/MMWAVE-SDK-AOP/03_02_00_06_AOP/exports/mmwave_sdk_user_guide.pdf}
+}
+
+@manual{ti_awr1843_ds,
+  author       = {{Texas Instruments}},
+  title        = {{AWR1843} Single-Chip 77- and 79-{GHz} {FMCW} Radar Sensor (Datasheet)},
+  organization = {Texas Instruments},
+  number       = {SWRS222D},
+  year         = {2024},
+  url          = {https://www.ti.com/lit/gpn/awr1843},
+  note         = {revision D, September 2024}
+}
+
+%% ---------------- Simulators / tools ----------------
+@misc{radarsimpy,
+  author       = {Peng, Zhengyu},
+  title        = {{RadarSimPy}: A Radar Simulator for {Python} (v8.3.0)},
+  year         = {2022},
+  howpublished = {Zenodo},
+  doi          = {10.5281/zenodo.6792269},
+  url          = {https://github.com/radarsimx/radarsimpy}
+}
+
+@misc{mathworks_radar,
+  author       = {{The MathWorks}},
+  title        = {Radar Toolbox Documentation: Automotive Radar},
+  year         = {2026},
+  url          = {https://www.mathworks.com/help/radar/automotive-radar.html},
+  note         = {accessed 2026-11-24}
+}
+
+@misc{gupta2019openradar,
+  author        = {Gupta, Arjun and Kosaka, Dashiell and Pan, Edwin and Tang, Jingning and Yao, Ruihao and Patel, Sanjay},
+  title         = {{OpenRadar}: A Toolkit for Prototyping mmWave Radar Applications},
+  year          = {2019},
+  eprint        = {1912.12395},
+  archivePrefix = {arXiv}
+}
+
+@misc{cui2023mmsim,
+  author        = {Cui, Han and Wu, Jiacheng and Dahnoun, Naim},
+  title         = {Millimetre-wave Radar for Low-Cost {3D} Imaging: A Performance Study},
+  year          = {2023},
+  howpublished  = {arXiv preprint; code: https://github.com/yizzfz/mmSim},
+  note          = {arXiv id unverified}
+}
+
+@misc{liu2023blender,
+  author        = {Liu, Yuan and Ahmadi, Moein and Fuchs, Johann and Alaee-Kerahroodi, Mohammad and Shankar, M. R. Bhavani},
+  title         = {A {Blender}-based Channel Simulator for {FMCW} Radar},
+  year          = {2023},
+  eprint        = {2307.09226},
+  archivePrefix = {arXiv}
+}
+
+@article{schussler2021realistic,
+  author  = {Sch{\"u}{\ss}ler, Christian and Hoffmann, Marcel and Br{\"a}unig, Johanna and Ullmann, Ingrid and Ebelt, Randolf and Vossiek, Martin},
+  title   = {A Realistic Radar Ray Tracing Simulator for Large {MIMO}-Arrays in Automotive Environments},
+  journal = {IEEE Journal of Microwaves},
+  volume  = {1},
+  number  = {4},
+  pages   = {962--974},
+  year    = {2021},
+  note    = {DOI unverified}
+}
+
+@article{bansal2023shenron,
+  author  = {Bansal, Kshitiz and others},
+  title   = {{SHENRON} -- Scalable, High Fidelity and Efficient Radar Simulation},
+  journal = {IEEE Robotics and Automation Letters},
+  year    = {2023},
+  url     = {https://github.com/Kshitizbansal/shenron-radar-simulator},
+  note    = {author list, volume, pages unverified}
+}
+
+@inproceedings{srivastava2025cshenron,
+  author    = {Srivastava, Satyam and Li, Jerry and Mishra, Pushkal and Bansal, Kshitiz and Bharadia, Dinesh},
+  title     = {{C-Shenron}: A Realistic Radar Simulator for End-to-End Autonomous Driving in {CARLA}},
+  booktitle = {Proc. IEEE Vehicular Technology Conference (VTC)},
+  year      = {2025},
+  url       = {https://github.com/ucsdwcsng/c-shenron}
+}
+
+@inproceedings{dosovitskiy2017carla,
+  author    = {Dosovitskiy, Alexey and Ros, German and Codevilla, Felipe and L{\'o}pez, Antonio and Koltun, Vladlen},
+  title     = {{CARLA}: An Open Urban Driving Simulator},
+  booktitle = {Proc. 1st Annual Conference on Robot Learning (CoRL)},
+  series    = {PMLR},
+  volume    = {78},
+  year      = {2017},
+  note      = {author list from memory}
+}
+
+@inproceedings{fahnemann2022sarsim,
+  author    = {Fahnemann, C. and Rother, N. and Blume, H.},
+  title     = {Interactive Synthetic Aperture Radar Simulator Generating and Visualizing Realistic {FMCW} Data},
+  booktitle = {Proc. International Conference on Radar Systems (RADAR 2022)},
+  pages     = {725--730},
+  year      = {2022},
+  doi       = {10.1049/ICP.2023.1281}
+}
+
+@misc{chen2026radarsim,
+  author        = {Chen, Chuhan and Huang, Tianshu and Prabhakara, Akarsh and Mummadi, Chaithanya Kumar and Cong, Zhongxiao and Rowe, Anthony and O'Toole, Matthew and Ramanan, Deva},
+  title         = {{RadarSim}: Simulating Single-Chip Radar via Multimodal Neural Fields},
+  year          = {2026},
+  eprint        = {2605.26328},
+  archivePrefix = {arXiv}
+}
+
+@inproceedings{holder2018measurements,
+  author    = {Holder, Martin Friedrich and Rosenberger, Philipp and Winner, Hermann and Dhondt, Thomas and Makkapati, Vamsi Prakash and Maier, Michael and Schreiber, Helmut and Magosi, Zoltan and Slavik, Zora and Bringmann, Oliver and Rosenstiel, Wolfgang},
+  title     = {Measurements Revealing Challenges in Radar Sensor Modeling for Virtual Validation of Autonomous Driving},
+  booktitle = {Proc. 21st International Conference on Intelligent Transportation Systems (ITSC)},
+  address   = {Maui, HI, USA},
+  year      = {2018},
+  note      = {DOI unverified}
+}
+
+@article{magosi2022survey,
+  author  = {Magosi, Zoltan Ferenc and Li, Hexuan and Rosenberger, Philipp and Wan, Li and Eichberger, Arno},
+  title   = {A Survey on Modelling of Automotive Radar Sensors for Virtual Test and Validation of Automated Driving},
+  journal = {Sensors},
+  volume  = {22},
+  number  = {15},
+  pages   = {5693},
+  year    = {2022},
+  doi     = {10.3390/s22155693}
+}
+
+%% ---------------- Impairments ----------------
+@inproceedings{budge1993range,
+  author    = {Budge, Jr., Mervin C. and Burt, Mickie P.},
+  title     = {Range Correlation Effects in Radars},
+  booktitle = {Record of the 1993 IEEE National Radar Conference},
+  address   = {Lynnfield, MA, USA},
+  pages     = {212--216},
+  year      = {1993},
+  doi       = {10.1109/NRC.1993.270463}
+}
+
+@article{siddiq2019phase,
+  author  = {Siddiq, Kashif and Hobden, Mervyn K. and Pennock, Steve R. and Watson, Robert J.},
+  title   = {Phase Noise in {FMCW} Radar Systems},
+  journal = {IEEE Transactions on Aerospace and Electronic Systems},
+  volume  = {55},
+  number  = {1},
+  pages   = {70--81},
+  year    = {2019},
+  doi     = {10.1109/TAES.2018.2847999}
+}
+
+@article{tschapek2022detailed,
+  author  = {Tschapek, Peter and K{\"o}rner, Georg and Carlowitz, Christian and Vossiek, Martin},
+  title   = {Detailed Analysis and Modeling of Phase Noise and Systematic Phase Distortions in {FMCW} Radar Systems},
+  journal = {IEEE Journal of Microwaves},
+  volume  = {2},
+  number  = {4},
+  pages   = {648--659},
+  year    = {2022},
+  note    = {DOI unverified}
+}
+
+@article{kasdin1995discrete,
+  author  = {Kasdin, N. Jeremy},
+  title   = {Discrete Simulation of Colored Noise and Stochastic Processes and $1/f^\alpha$ Power Law Noise Generation},
+  journal = {Proceedings of the IEEE},
+  volume  = {83},
+  number  = {5},
+  pages   = {802--827},
+  year    = {1995},
+  doi     = {10.1109/5.381848}
+}
+
+@article{melzer2015short,
+  author  = {Melzer, Alexander and Onic, Alexander and Starzer, Florian and Huemer, Mario},
+  title   = {Short-Range Leakage Cancelation in {FMCW} Radar Transceivers Using an Artificial On-Chip Target},
+  journal = {IEEE Journal of Selected Topics in Signal Processing},
+  volume  = {9},
+  number  = {8},
+  pages   = {1650--1660},
+  year    = {2015},
+  doi     = {10.1109/JSTSP.2015.2465298}
+}
+
+@inproceedings{wang2019range,
+  author    = {Wang, Pu and Millar, David and Parsons, Kieran and Ma, Rui and Orlik, Philip V.},
+  title     = {Range Accuracy Analysis for {FMCW} Systems with Source Nonlinearity},
+  booktitle = {Proc. IEEE MTT-S International Conference on Microwaves for Intelligent Mobility (ICMIM)},
+  year      = {2019},
+  note      = {MERL TR2019-018; DOI unverified}
+}
+
+@article{feger2011wband,
+  author  = {Feger, Reinhard and Wagner, Christoph and Stelzer, Andreas},
+  title   = {A {W}-Band Heterodyne {FMCW} Radar Based on {TX} {IQ}-Modulation},
+  journal = {Frequenz},
+  volume  = {65},
+  number  = {7--8},
+  pages   = {183--191},
+  year    = {2011},
+  doi     = {10.1515/freq.2011.026}
+}
+
+@article{goppelt2010automotive,
+  author  = {Goppelt, M. and Bl{\"o}cher, H.-L. and Menzel, W.},
+  title   = {Automotive Radar -- Investigation of Mutual Interference Mechanisms},
+  journal = {Advances in Radio Science},
+  volume  = {8},
+  pages   = {55--60},
+  year    = {2010},
+  doi     = {10.5194/ars-8-55-2010}
+}
+
+@inproceedings{toth2018analytical,
+  author    = {Toth, Mate and others},
+  title     = {Analytical Investigation of Non-Coherent Mutual {FMCW} Radar Interference},
+  booktitle = {IEEE conference (IEEE Xplore document 8546588)},
+  year      = {2018},
+  note      = {unverified: full author list, venue (possibly EuRAD 2018), pages, DOI}
+}
+
+@misc{kohnert2023height,
+  author        = {Kohnert, S{\"o}ren and Vogt, Michael and Stolle, Reinhard},
+  title         = {{FMCW} Radar Height Estimation of Moving Vehicles by Analyzing Multipath Reflections},
+  year          = {2023},
+  eprint        = {2312.11148},
+  archivePrefix = {arXiv},
+  note          = {publication venue unverified}
+}
+
+%% ---------------- Detection / CFAR ----------------
+@article{rohling1983radar,
+  author  = {Rohling, Hermann},
+  title   = {Radar {CFAR} Thresholding in Clutter and Multiple Target Situations},
+  journal = {IEEE Transactions on Aerospace and Electronic Systems},
+  volume  = {19},
+  number  = {4},
+  pages   = {608--621},
+  year    = {1983},
+  doi     = {10.1109/TAES.1983.309350},
+  note    = {volume, start page, year verified (ADS); issue, end page, DOI unverified}
+}
+
+@article{gandhi1988analysis,
+  author  = {Gandhi, P. P. and Kassam, S. A.},
+  title   = {Analysis of {CFAR} Processors in Nonhomogeneous Background},
+  journal = {IEEE Transactions on Aerospace and Electronic Systems},
+  volume  = {24},
+  number  = {4},
+  pages   = {427--445},
+  year    = {1988},
+  note    = {unverified (from memory)}
+}
+
+@article{kronauge2013fast,
+  author  = {Kronauge, Matthias and Rohling, Hermann},
+  title   = {Fast Two-Dimensional {CFAR} Procedure},
+  journal = {IEEE Transactions on Aerospace and Electronic Systems},
+  volume  = {49},
+  number  = {3},
+  pages   = {1817--1823},
+  year    = {2013},
+  doi     = {10.1109/TAES.2013.6558022}
+}
+
+@article{swerling1960probability,
+  author  = {Swerling, Peter},
+  title   = {Probability of Detection for Fluctuating Targets},
+  journal = {IRE Transactions on Information Theory},
+  volume  = {6},
+  number  = {2},
+  pages   = {269--308},
+  year    = {1960},
+  doi     = {10.1109/TIT.1960.1057561}
+}
+
+@article{shnidman2002determination,
+  author  = {Shnidman, David A.},
+  title   = {Determination of Required {SNR} Values},
+  journal = {IEEE Transactions on Aerospace and Electronic Systems},
+  volume  = {38},
+  number  = {3},
+  pages   = {1059--1064},
+  year    = {2002},
+  doi     = {10.1109/TAES.2002.1039422}
+}
+
+%% ---------------- DoA / estimation ----------------
+@article{capon1969high,
+  author  = {Capon, Jack},
+  title   = {High-Resolution Frequency-Wavenumber Spectrum Analysis},
+  journal = {Proceedings of the IEEE},
+  volume  = {57},
+  number  = {8},
+  pages   = {1408--1418},
+  year    = {1969},
+  doi     = {10.1109/PROC.1969.7278}
+}
+
+@article{schmidt1986multiple,
+  author  = {Schmidt, Ralph O.},
+  title   = {Multiple Emitter Location and Signal Parameter Estimation},
+  journal = {IEEE Transactions on Antennas and Propagation},
+  volume  = {34},
+  number  = {3},
+  pages   = {276--280},
+  year    = {1986},
+  doi     = {10.1109/TAP.1986.1143830}
+}
+
+@article{stoica1989music,
+  author  = {Stoica, Petre and Nehorai, Arye},
+  title   = {{MUSIC}, Maximum Likelihood, and {Cram\'er-Rao} Bound},
+  journal = {IEEE Transactions on Acoustics, Speech, and Signal Processing},
+  volume  = {37},
+  number  = {5},
+  pages   = {720--741},
+  year    = {1989},
+  doi     = {10.1109/29.17564}
+}
+
+@article{rife1974single,
+  author  = {Rife, David C. and Boorstyn, Robert R.},
+  title   = {Single Tone Parameter Estimation from Discrete-Time Observations},
+  journal = {IEEE Transactions on Information Theory},
+  volume  = {20},
+  number  = {5},
+  pages   = {591--598},
+  year    = {1974},
+  doi     = {10.1109/TIT.1974.1055282}
+}
+
+@article{bechter2017compensation,
+  author  = {Bechter, Jonathan and Roos, Fabian and Waldschmidt, Christian},
+  title   = {Compensation of Motion-Induced Phase Errors in {TDM} {MIMO} Radars},
+  journal = {IEEE Microwave and Wireless Components Letters},
+  volume  = {27},
+  number  = {12},
+  pages   = {1164--1166},
+  year    = {2017},
+  note    = {verified via reference list of roos2018enhancement; DOI unverified}
+}
+
+@inproceedings{roos2018enhancement,
+  author    = {Roos, Fabian and Bechter, Jonathan and Appenrodt, Nils and Dickmann, J{\"u}rgen and Waldschmidt, Christian},
+  title     = {Enhancement of {Doppler} Unambiguity for Chirp-Sequence Modulated {TDM-MIMO} Radars},
+  booktitle = {Proc. IEEE MTT-S International Conference on Microwaves for Intelligent Mobility (ICMIM)},
+  year      = {2018},
+  note      = {venue inferred from file name, unverified}
+}
+
+%% ---------------- Tracking ----------------
+@inproceedings{buhren2007global,
+  author    = {B{\"u}hren, Markus and Yang, Bin},
+  title     = {A Global Motion Model for Target Tracking in Automotive Applications},
+  booktitle = {Proc. IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)},
+  pages     = {II-313--II-316},
+  year      = {2007}
+}
+
+%% ---------------- Micro-Doppler ----------------
+@article{chen2006micro,
+  author  = {Chen, Victor C. and Li, Fayin and Ho, Shen-Shyang and Wechsler, Harry},
+  title   = {Micro-{Doppler} Effect in Radar: Phenomenon, Model, and Simulation Study},
+  journal = {IEEE Transactions on Aerospace and Electronic Systems},
+  volume  = {42},
+  number  = {1},
+  pages   = {2--21},
+  year    = {2006},
+  doi     = {10.1109/TAES.2006.1603402},
+  note    = {author list from memory; other fields verified}
+}
+
+@book{chen2019book,
+  author    = {Chen, Victor C.},
+  title     = {The Micro-{Doppler} Effect in Radar},
+  edition   = {2nd},
+  publisher = {Artech House},
+  year      = {2019},
+  isbn      = {978-1-63081-546-2}
+}
+
+@inproceedings{martin1990analysis,
+  author    = {Martin, J. and Mulgrew, B.},
+  title     = {Analysis of the Theoretical Radar Return Signal from Aircraft Propeller Blades},
+  booktitle = {Proc. IEEE International Radar Conference},
+  pages     = {569--572},
+  year      = {1990},
+  note      = {unverified: record not retrievable; widely cited as the origin of the sinc blade model}
+}
+
+@inproceedings{martin1992analysis,
+  author    = {Martin, J. and Mulgrew, B.},
+  title     = {Analysis of the Effects of Blade Pitch on the Radar Return Signal from Rotating Aircraft Blades},
+  booktitle = {Proc. International Conference Radar 92},
+  address   = {Brighton, UK},
+  publisher = {IET},
+  pages     = {446--449},
+  year      = {1992}
+}
+
+@misc{costa2025modeling,
+  author        = {Costa, Heraldo Cesar Alves and Myint, Saw James and Andrich, Carsten and Giehl, Sebastian W. and Engelhardt, Maximilian and Schneider, Christian and Thom{\"a}, Reiner S.},
+  title         = {Modeling Micro-{Doppler} Signature of Multi-Propeller Drones in Distributed {ISAC}},
+  year          = {2025},
+  eprint        = {2504.05168},
+  archivePrefix = {arXiv}
+}
+
+@misc{westerkam2025second,
+  author        = {Westerkam, Anders Malthe and Damkj{\ae}r, Alba Spliid and Villadsen, Rasmus Erik and Poulsen, Magnus {\O}rum Bastrup and Pedersen, Troels},
+  title         = {Second-Order Characterization of Micro {Doppler} Radar Signatures of Drone Swarms},
+  year          = {2025},
+  eprint        = {2506.00497},
+  archivePrefix = {arXiv}
+}
+
+@article{rahman2018radar,
+  author  = {Rahman, Samiur and Robertson, Duncan A.},
+  title   = {Radar Micro-{Doppler} Signatures of Drones and Birds at {K}-band and {W}-band},
+  journal = {Scientific Reports},
+  volume  = {8},
+  year    = {2018},
+  doi     = {10.1038/s41598-018-35880-9},
+  note    = {DOI from publisher URL; article number (17396) from memory, unverified}
+}
+
+@article{rahman2020classification,
+  author  = {Rahman, Samiur and Robertson, Duncan Alexander},
+  title   = {Classification of Drones and Birds Using Convolutional Neural Networks Applied to Radar Micro-{Doppler} Spectrogram Images},
+  journal = {IET Radar, Sonar \& Navigation},
+  volume  = {14},
+  number  = {5},
+  pages   = {653--661},
+  year    = {2020},
+  doi     = {10.1049/iet-rsn.2019.0493}
+}
+
+@article{molchanov2014classification,
+  author  = {Molchanov, Pavlo and Harmanny, Ronny I. A. and de Wit, Jaco J. M. and Egiazarian, Karen and Astola, Jaakko},
+  title   = {Classification of Small {UAVs} and Birds by Micro-{Doppler} Signatures},
+  journal = {International Journal of Microwave and Wireless Technologies},
+  volume  = {6},
+  number  = {3--4},
+  pages   = {435--444},
+  year    = {2014},
+  doi     = {10.1017/S1759078714000282}
+}
+
+@inproceedings{harmanny2014radar,
+  author    = {Harmanny, R. I. A. and de Wit, J. J. M. and Pr{\'e}mel Cabic, G.},
+  title     = {Radar Micro-{Doppler} Feature Extraction Using the Spectrogram and the Cepstrogram},
+  booktitle = {Proc. 11th European Radar Conference (EuRAD)},
+  address   = {Rome, Italy},
+  pages     = {165--168},
+  year      = {2014},
+  doi       = {10.1109/EuRAD.2014.6991233}
+}
+
+@misc{gong2023formation,
+  author        = {Gong, Jiangkun and Yan, Jun and Kong, Deyong and Chen, Ruizhi and Li, Deren},
+  title         = {Formation Wing-Beat Modulation ({FWM}): A Tool for Quantifying Bird Flocks Using Radar Micro-{Doppler} Signals},
+  year          = {2023},
+  eprint        = {2309.15415},
+  archivePrefix = {arXiv}
+}
+
+@article{boulic1990global,
+  author  = {Boulic, Ronan and Magnenat-Thalmann, Nadia and Thalmann, Daniel},
+  title   = {A Global Human Walking Model with Real-Time Kinematic Personification},
+  journal = {The Visual Computer},
+  volume  = {6},
+  number  = {6},
+  pages   = {344--358},
+  year    = {1990},
+  doi     = {10.1007/BF01901021},
+  note    = {DOI seen in unpaywall link; volume/number/pages from memory, unverified}
+}
+
+@article{vandorp2003human,
+  author  = {van Dorp, P. and Groen, F. C. A.},
+  title   = {Human Walking Estimation with Radar},
+  journal = {IEE Proceedings - Radar, Sonar and Navigation},
+  volume  = {150},
+  number  = {5},
+  pages   = {356--365},
+  year    = {2003},
+  doi     = {10.1049/ip-rsn:20030568}
+}
+
+@misc{abdulatif2017realtime,
+  author        = {Abdulatif, Sherif and Aziz, Fady and Kleiner, Bernhard and Schneider, Urs},
+  title         = {Real-Time Capable Micro-{Doppler} Signature Decomposition of Walking Human Limbs},
+  year          = {2017},
+  eprint        = {1711.09175},
+  archivePrefix = {arXiv}
+}
+
+@misc{ezuma2019compact,
+  author        = {Ezuma, Martins and Funderburk, Mark and Guvenc, Ismail},
+  title         = {Compact-Range {RCS} Measurements and Modeling of Small Drones at 15 {GHz} and 25 {GHz}},
+  year          = {2019},
+  eprint        = {1911.05926},
+  archivePrefix = {arXiv}
+}
+
+%% ---------------- Datasets ----------------
+@inproceedings{rebut2022raw,
+  author    = {Rebut, Julien and Ouaknine, Arthur and Malik, Waqas and P{\'e}rez, Patrick},
+  title     = {Raw High-Definition Radar for Multi-Task Learning},
+  booktitle = {Proc. IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2022},
+  eprint    = {2112.10646},
+  archivePrefix = {arXiv}
+}
+
+@inproceedings{ouaknine2021carrada,
+  author    = {Ouaknine, Arthur and Newson, Alasdair and Rebut, Julien and Tupin, Florence and P{\'e}rez, Patrick},
+  title     = {{CARRADA} Dataset: Camera and Automotive Radar with Range-Angle-{Doppler} Annotations},
+  booktitle = {Proc. 25th International Conference on Pattern Recognition (ICPR)},
+  year      = {2021},
+  doi       = {10.1109/ICPR48806.2021.9413181}
+}
+
+@misc{lim2021radical,
+  author       = {Lim, Teck-Yian and others},
+  title        = {{RaDICaL}: A Synchronized {FMCW} Radar, Depth, {IMU} and {RGB} Camera Data Dataset with Low-Level {FMCW} Radar Signals},
+  year         = {2021},
+  howpublished = {Illinois Data Bank, IDB-3289560},
+  url          = {https://publish.illinois.edu/radicaldata/},
+  note         = {authors, exact title and associated paper venue unverified}
+}
+
+@misc{gao2022raw,
+  author       = {Gao, Xiangyu and Luo, Youchen and Xing, Guanbin and Roy, Sumit and Liu, Hui},
+  title        = {Raw {ADC} Data of 77{GHz} {MMWave} Radar for Automotive Object Detection},
+  year         = {2022},
+  howpublished = {IEEE DataPort},
+  doi          = {10.21227/xm40-jx59}
+}
+
+@misc{kramer2022coloradar,
+  author        = {Kramer, Andrew and Harlow, Kyle and Williams, Christopher and Heckman, Christoffer},
+  title         = {{ColoRadar}: The Direct {3D} Millimeter Wave Radar Dataset},
+  year          = {2021},
+  eprint        = {2103.04510},
+  archivePrefix = {arXiv},
+  note          = {journal version (IJRR) unverified}
+}
+
+@misc{karlsson2021radar,
+  author       = {Karlsson, Alexander},
+  title        = {Radar Measurements on Drones, Birds and Humans with a 77{GHz} {FMCW} Sensor},
+  year         = {2021},
+  howpublished = {Zenodo, v1.0},
+  doi          = {10.5281/zenodo.5511912}
+}
+
+@misc{kang2024millimeter,
+  author       = {Kang, Seongjoon and Forsten, Henrik and Semkin, Vasilii and Rangan, Sundeep},
+  title        = {Millimeter Wave 60 {GHz} Radar Measurements: {UAS} and Birds},
+  year         = {2024},
+  howpublished = {IEEE DataPort},
+  doi          = {10.21227/c8r5-6h79}
+}
