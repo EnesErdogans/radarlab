@@ -134,3 +134,41 @@ def empirical_pd(masks: np.ndarray, cells: np.ndarray) -> float:
     m = np.asarray(masks, bool)
     c = np.asarray(cells, int).reshape(-1, 2)
     return float(m[:, c[:, 0], c[:, 1]].mean())
+
+
+# ------------------------------------------------------------ ML estimator
+def ml_tone_3d(x: np.ndarray, pad: int = 4, n_iter: int = 3) -> np.ndarray:
+    """Maximum-likelihood frequencies (ω_k, ω_m, ω_n) [rad/sample] of a single
+    separable complex exponential in white noise, x shape (K, M, N).
+
+    Coarse search on a ``pad``-times zero-padded 3-D FFT, then cyclic
+    coordinate ascent of the periodogram |Σ x·e^{−j(ω_k k + ω_m m + ω_n n)}|²
+    with bounded scalar optimisation (±1 padded bin) per axis. Unbiased and
+    efficient (attains the CRLB) above the threshold SNR.
+    """
+    import scipy.optimize as so
+
+    K, M, N = x.shape
+    F = np.abs(np.fft.fftn(x, s=(pad * K, pad * M, pad * N))) ** 2
+    i = np.unravel_index(int(np.argmax(F)), F.shape)
+    w = np.array([2 * np.pi * i[a] / F.shape[a] for a in range(3)])
+    w = (w + np.pi) % (2 * np.pi) - np.pi
+    idx = [np.arange(K), np.arange(M), np.arange(N)]
+
+    def cost(wv: np.ndarray) -> float:
+        e = [np.exp(-1j * wv[a] * idx[a]) for a in range(3)]
+        return -float(np.abs(np.einsum("kmn,k,m,n->", x, e[0], e[1], e[2])) ** 2)
+
+    for _ in range(n_iter):
+        for a in range(3):
+            step = 2 * np.pi / F.shape[a]
+
+            def f(v: float, a: int = a) -> float:
+                wv = w.copy()
+                wv[a] = v
+                return cost(wv)
+
+            r = so.minimize_scalar(f, bounds=(w[a] - step, w[a] + step), method="bounded",
+                                   options={"xatol": 1e-10})
+            w[a] = r.x
+    return w
