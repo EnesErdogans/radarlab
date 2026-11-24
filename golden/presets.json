@@ -1,5 +1,6 @@
 {
  "name": "presets",
+ "conventionVersion": 2,
  "description": "Preset configs, derived quantities, periodic Hann windows",
  "presets": [
   {

@@ -29,7 +29,7 @@ def test_rmse_approaches_crlb_at_high_snr():
     # model-exact frequencies at the frame / ADC-window centre
     Rm = R0 + v * 0.5 * (cfg.n_chirps - 1) * cfg.te
     tfc = cfg.adc_start_time + (cfg.n_samples - 1) / 2 / cfg.fs
-    w_k = 2 * np.pi * 0.5 * np.sin(np.deg2rad(th_deg))
+    w_k = -2 * np.pi * 0.5 * np.sin(np.deg2rad(th_deg))      # spatial sign is negative (conv. v2)
     w_m = 2 * np.pi * 2 * v * cfg.te * (cfg.fc + cfg.slope * tfc) / C0
     w_n = 2 * np.pi * (cfg.slope * 2 * Rm / C0 + 2 * v * cfg.fc / C0) / cfg.fs
     err = (E - [w_k, w_m, w_n] + np.pi) % (2 * np.pi) - np.pi

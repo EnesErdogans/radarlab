@@ -12,7 +12,7 @@ def _spec(target, n_frames=8, snr_ref_db=60.0, seed=0):
                                                snr_ref_db=snr_ref_db)) for i in range(n_frames)]
     R = float(np.linalg.norm(target.center([0.0])[0]))
     rb = int(round(R / cfg.range_resolution))
-    y = dsp.slow_time(frames, slice(rb - 1, rb + 2), channels=0, cfg=cfg)
+    y = dsp.slow_time(frames, rb, channels=0, cfg=cfg)
     return cfg, dsp.spectrogram(y, 1 / cfg.te, cfg.wavelength, nperseg=128)
 
 
@@ -21,7 +21,7 @@ def test_blade_tip_doppler_extent():
     L, rpm = 0.12, 6000.0
     dr = rl.Drone((0, 15, 0), n_rotors=1, n_blades=2, rpm=rpm, blade_length=L,
                   rotor_offsets=[[0, 0, 0]], body_rcs=0.0, blade_rcs=0.05)
-    cfg, sp = _spec(dr)
+    cfg, sp = _spec(dr, snr_ref_db=80.0)
     f_rot = rpm / 60
     f_max = 4 * np.pi * f_rot * L / cfg.wavelength
     df = sp.freq[1] - sp.freq[0]
@@ -41,3 +41,33 @@ def test_drone_vs_bird_spread():
     wb = np.diff(dsp.doppler_extent(sb, -25))[0]
     assert wd > 5 * wb
     assert wb < 10.0
+
+
+@pytest.mark.parametrize("n_blades", [2, 3, 4, 5])
+def test_blade_flash_rate(n_blades):
+    """Flash rate N_b·f_rot (even N_b) or 2·N_b·f_rot (odd N_b); fidelity §12.1."""
+    from radarlab.validation import _rotor_slow_time, flash_times
+    cfg = rl.micro_doppler_24ghz()
+    dr = rl.Drone((0, 15, 0), n_rotors=1, n_blades=n_blades, rpm=2400.0, rotor_offsets=[[0, 0, 0]],
+                  body_rcs=0.0, blade_rcs=0.05)
+    rate = float(dr.flash_rate()[0])
+    f_rot = 2400 / 60
+    assert rate == pytest.approx(f_rot * n_blades * (1 if n_blades % 2 == 0 else 2))
+    y = _rotor_slow_time(dr, cfg, 16, noise=False)
+    tf = flash_times(y, cfg.te, 0.5 / rate)
+    period = np.polyfit(np.arange(len(tf)), tf, 1)[0]
+    assert 1 / period == pytest.approx(rate, rel=0.01)
+
+
+def test_line_blade_matches_discretised_blade():
+    """Analytic sinc line-blade (a) ≈ discretised point blade (b) for L ≪ ΔR."""
+    cfg = rl.micro_doppler_24ghz().replace(n_chirps=64)
+    kw = dict(n_rotors=1, n_blades=2, rpm=3000.0, rotor_offsets=[[0, 0, 0]], body_rcs=0.0, blade_rcs=0.05,
+              random_blade_phase=False)
+    a = rl.synthesize_cube(cfg, rl.Drone((0, 15, 0), blade_model="line", **kw), noise=False)
+    b = rl.synthesize_cube(cfg, rl.Drone((0, 15, 0), blade_model="points", points_per_blade=200, **kw), noise=False)
+    rb = int(round(15 / cfg.range_resolution))
+    ya, yb = dsp.range_fft(a)[0, :, rb], dsp.range_fft(b)[0, :, rb]
+    corr = np.abs(np.vdot(ya, yb)) / (np.linalg.norm(ya) * np.linalg.norm(yb))
+    assert corr > 0.99
+    assert np.linalg.norm(ya) == pytest.approx(np.linalg.norm(yb), rel=0.05)

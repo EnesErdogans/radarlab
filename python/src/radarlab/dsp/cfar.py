@@ -21,10 +21,15 @@ the halves are unequal; α then uses n = min(n_lead, n_lag) and, if a half has
 fewer than a quarter of the cells, CA is used for that CUT (documented
 approximation).
 
-Non-coherent channel integration: with P = Σ_k |X_k|² over K channels the noise
-is Gamma(K, ·), not exponential. For CA the exact multiplier is obtained from
-X/(X+S) ~ Beta(K, N·K):  Pfa = 1 − I_{c/(1+c)}(K, N·K), c = α/N  (pass
-``n_channels=K``). OS/GO/SO always use the K = 1 formulas.
+Non-coherent channel integration (brief REVISION 1): with P = Σ_k |X_k|² over
+K channels the noise is Gamma(K), not exponential, and α is computed *exactly*
+for that case (pass ``n_channels=K``; the pipeline does so by default):
+  CA:    X/(X+S) ~ Beta(K, N·K) → α = N·u/(1−u), u = I⁻¹(K, N·K; 1−Pfa)
+  OS:    Pfa = ∫₀¹ Q(K, α·F⁻¹(u))·Beta(u; k, N−k+1) du       (quadrature)
+  GO/SO: Pfa = ∫₀¹ Q(K, β·G⁻¹(u))·{2u | 2(1−u)} du, β = α/n   (quadrature)
+with Q the regularised upper incomplete gamma, F/G the Gamma(K)/Gamma(nK)
+cdfs. All formulas assume i.i.d. training cells — true for rectangular FFT
+windows, *not* for Hann (adjacent cells correlated by −2/3, fidelity §0.3).
 """
 from __future__ import annotations
 
@@ -35,7 +40,9 @@ from typing import Literal
 import numpy as np
 import scipy.ndimage as ndi
 import scipy.optimize
+import scipy.integrate
 import scipy.special
+import scipy.stats
 
 CfarKind = Literal["ca", "go", "so", "os"]
 
@@ -43,51 +50,59 @@ CfarKind = Literal["ca", "go", "so", "os"]
 # ------------------------------------------------------------------ α formulas
 @lru_cache(maxsize=4096)
 def ca_alpha(n: int, pfa: float, n_channels: int = 1) -> float:
-    """CA-CFAR multiplier for N training cells (threshold = α · mean)."""
+    """CA-CFAR multiplier for N training cells (threshold = α · mean).
+
+    K = 1: α = N·(Pfa^(−1/N) − 1). K > 1 (Gamma(K) noise, exact):
+    α = N·u/(1−u), u = I⁻¹(K, N·K; 1 − Pfa) (``betaincinv``)."""
     if n <= 0:
         return np.inf
     if n_channels == 1:
         return float(n * (pfa ** (-1.0 / n) - 1.0))
     K = n_channels
+    u = float(scipy.special.betaincinv(K, n * K, 1.0 - pfa))
+    return float(n * u / (1.0 - u))
 
-    def f(c: float) -> float:
-        return float(scipy.special.betaincc(K, n * K, c / (1 + c)) - pfa)
 
+def os_pfa(alpha: float, n: int, k: int, n_channels: int = 1) -> float:
+    """OS-CFAR Pfa for threshold α·X_(k) (k-th smallest of N cells).
+
+    K = 1: Π_{i=0}^{k−1} (N−i)/(N−i+α) (Rohling 1983). K > 1: exact
+    Pfa = ∫₀¹ Q(K, α·F⁻¹(u)) · Beta(u; k, N−k+1) du with F the Gamma(K) cdf
+    (X_(k) = F⁻¹(U_(k)), U_(k) ~ Beta(k, N−k+1)); adaptive quadrature."""
+    if n_channels == 1:
+        i = np.arange(k)
+        return float(np.exp(np.sum(np.log(n - i) - np.log(n - i + alpha))))
+    K = n_channels
+    bd = scipy.stats.beta(k, n - k + 1)
+    f = lambda u: scipy.special.gammaincc(K, alpha * scipy.special.gammaincinv(K, u)) * bd.pdf(u)
+    lo, hi = bd.ppf(1e-14), bd.ppf(1 - 1e-14)
+    return float(scipy.integrate.quad(f, lo, hi, epsabs=0, epsrel=1e-10, limit=400,
+                                      points=[bd.mean()])[0])
+
+
+def _solve_alpha(pfa_fn, pfa: float) -> float:
+    """Solve pfa_fn(α) = pfa (pfa_fn decreasing) on a log scale."""
     hi = 1.0
-    while f(hi) > 0:
-        hi *= 2
-    c = scipy.optimize.brentq(f, 0.0, hi, xtol=1e-14, rtol=1e-12)
-    return float(c * n)
-
-
-def os_pfa(alpha: float, n: int, k: int) -> float:
-    """OS-CFAR Pfa = Π_{i=0}^{k−1} (N−i)/(N−i+α)."""
-    i = np.arange(k)
-    return float(np.exp(np.sum(np.log(n - i) - np.log(n - i + alpha))))
+    while pfa_fn(hi) > pfa:
+        hi *= 2.0
+    lo = 0.0 if hi == 1.0 else hi / 2
+    g = lambda a: np.log(max(pfa_fn(a), 1e-300)) - np.log(pfa)
+    return float(scipy.optimize.brentq(g, lo, hi, xtol=1e-13, rtol=1e-12))
 
 
 @lru_cache(maxsize=4096)
-def os_alpha(n: int, pfa: float, k: int) -> float:
-    """OS-CFAR multiplier (threshold = α · k-th smallest of N), by bisection."""
+def os_alpha(n: int, pfa: float, k: int, n_channels: int = 1) -> float:
+    """OS-CFAR multiplier (threshold = α · k-th smallest of N); exact for any K."""
     if n <= 0 or k <= 0:
         return np.inf
     k = min(k, n)
-    lo, hi = 0.0, 1.0
-    while os_pfa(hi, n, k) > pfa:
-        hi *= 2.0
-    for _ in range(200):
-        mid = 0.5 * (lo + hi)
-        if os_pfa(mid, n, k) > pfa:
-            lo = mid
-        else:
-            hi = mid
-        if hi - lo <= 1e-12 * hi:
-            break
-    return 0.5 * (lo + hi)
+    return _solve_alpha(lambda a: os_pfa(a, n, k, n_channels), pfa)
 
 
 def os_rank_index(n: int, rank: float) -> int:
-    """k = round(rank·N), clipped to [1, N] (1-based order statistic)."""
+    """k = round(rank·N), clipped to [1, N] (1-based order statistic).
+
+    Rounding is numpy's round-half-to-even (e.g. 0.75·6 = 4.5 → 4)."""
     return int(min(max(int(np.round(rank * n)), 1), n))
 
 
@@ -103,27 +118,40 @@ def go_pfa_beta(beta: float, n: int) -> float:
     return float(2 * (1 + beta) ** (-n) - so_pfa_beta(beta, n))
 
 
+def gs_pfa_beta(beta: float, n: int, kind: str, n_channels: int = 1) -> float:
+    """GO/SO Pfa for threshold β·max/min(S1, S2) with Gamma(K) cells.
+
+    K = 1: closed forms above. K > 1: exact quadrature
+    Pfa = ∫₀¹ Q(K, β·G⁻¹(u))·w(u) du, G the Gamma(nK) cdf of a half sum,
+    w(u) = 2u (GO, max) or 2(1−u) (SO, min)."""
+    if n_channels == 1:
+        return go_pfa_beta(beta, n) if kind == "go" else so_pfa_beta(beta, n)
+    K = n_channels
+    w = (lambda u: 2 * u) if kind == "go" else (lambda u: 2 * (1 - u))
+    f = lambda u: scipy.special.gammaincc(K, beta * scipy.special.gammaincinv(n * K, u)) * w(u)
+    # split at quantiles where the integrand changes scale; tolerance ≪ Pfa
+    edges = [0.0, 0.01, 0.1, 0.5, 0.9, 0.99, 0.999, 1.0]
+    return float(sum(scipy.integrate.quad(f, a, b, epsabs=1e-16, epsrel=1e-9, limit=200)[0]
+                     for a, b in zip(edges[:-1], edges[1:])))
+
+
 @lru_cache(maxsize=4096)
-def gs_alpha(n_half: int, pfa: float, kind: str) -> float:
-    """GO/SO multiplier on the *mean* of a half (α = n·β)."""
+def gs_alpha(n_half: int, pfa: float, kind: str, n_channels: int = 1) -> float:
+    """GO/SO multiplier on the *mean* of a half (α = n·β); exact for any K."""
     if n_half <= 0:
         return np.inf
-    fn = go_pfa_beta if kind == "go" else so_pfa_beta
-    hi = 1.0
-    while fn(hi, n_half) > pfa:
-        hi *= 2
-    beta = scipy.optimize.brentq(lambda b: fn(b, n_half) - pfa, 0.0, hi, xtol=1e-14, rtol=1e-12)
+    beta = _solve_alpha(lambda b: gs_pfa_beta(b, n_half, kind, n_channels), pfa)
     return float(beta * n_half)
 
 
 def cfar_alpha(kind: CfarKind, n: int, pfa: float, os_rank: float = 0.75, n_channels: int = 1) -> float:
-    """Multiplier α for a CFAR of the given kind and N training cells."""
+    """Multiplier α for a CFAR of the given kind, N training cells, K channels."""
     if kind == "ca":
         return ca_alpha(n, pfa, n_channels)
     if kind == "os":
-        return os_alpha(n, pfa, os_rank_index(n, os_rank))
+        return os_alpha(n, pfa, os_rank_index(n, os_rank), n_channels)
     if kind in ("go", "so"):
-        return gs_alpha(n // 2, pfa, kind)
+        return gs_alpha(n // 2, pfa, kind, n_channels)
     raise ValueError(kind)
 
 
@@ -174,7 +202,7 @@ def cfar_2d(P: np.ndarray, guard: tuple[int, int] = (2, 2), train: tuple[int, in
     pfa : design false-alarm probability.
     kind : 'ca' | 'go' | 'so' | 'os'.
     os_rank : OS rank fraction (k = round(rank·N)).
-    n_channels : channels summed non-coherently in P (CA only, Gamma-exact α).
+    n_channels : K, channels summed non-coherently in P (exact Gamma(K) α, all kinds).
     """
     P = np.asarray(P, float)
     Nr, Md = P.shape
@@ -199,7 +227,7 @@ def cfar_2d(P: np.ndarray, guard: tuple[int, int] = (2, 2), train: tuple[int, in
             ca_stat = _box(Pp, trainm, P.shape) / np.maximum(n_tr, 1)
             stat = np.where(fallback, ca_stat, stat)
             keys = set(zip(nmin.ravel().tolist(), fallback.ravel().tolist(), n_tr.ravel().tolist()))
-            amap = {key: (ca_alpha(key[2], pfa) if key[1] else gs_alpha(key[0], pfa, kind))
+            amap = {key: (ca_alpha(key[2], pfa, n_channels) if key[1] else gs_alpha(key[0], pfa, kind, n_channels))
                     for key in keys}
             alpha = np.array([amap[key] for key in zip(nmin.ravel().tolist(), fallback.ravel().tolist(),
                                                        n_tr.ravel().tolist())]).reshape(P.shape)
@@ -214,7 +242,7 @@ def cfar_2d(P: np.ndarray, guard: tuple[int, int] = (2, 2), train: tuple[int, in
             vals = np.sort(vals, axis=-1)                                    # NaN last
             k = np.array([os_rank_index(int(n), os_rank) for n in n_tr[r0:r1, 0]])
             stat[r0:r1] = np.take_along_axis(vals, (k - 1)[:, None, None].repeat(Md, 1), -1)[..., 0]
-        uniq = {int(n): os_alpha(int(n), pfa, os_rank_index(int(n), os_rank)) for n in np.unique(n_tr)}
+        uniq = {int(n): os_alpha(int(n), pfa, os_rank_index(int(n), os_rank), n_channels) for n in np.unique(n_tr)}
         alpha = np.vectorize(uniq.get, otypes=[float])(n_tr)
     else:
         raise ValueError(f"unknown CFAR kind {kind!r}")

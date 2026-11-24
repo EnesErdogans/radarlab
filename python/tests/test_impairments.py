@@ -66,6 +66,7 @@ def test_swerling_gain_statistics(rng):
 def test_leakage_and_two_ray():
     cfg = _cfg()
     c = imp.add_leakage(np.zeros((2, 32, 128), complex), cfg, distance=0.05, power_db=40)
+    assert np.abs(c).max() == pytest.approx(100.0)
     p = np.abs(dsp.range_fft(c[0, 0])) ** 2
     assert np.argmax(p) == 0
     tg = rl.PointTarget((0, 30.0, 1.0))
@@ -86,3 +87,60 @@ def test_fmcw_interference_burst():
     occ = np.mean(np.abs(x) > 0)
     assert 0 < occ < 0.5                          # short bursts, not continuous
     assert np.abs(x).max() == pytest.approx(10 ** 1.5)
+
+
+def test_phase_noise_shared_across_channels_and_scatterers(rng):
+    """One realisation per frame: all virtual channels see the identical
+    residual; two scatterers at the same delay see the same residual."""
+    cfg = rl.awr1843_like().replace(n_chirps=8, n_samples=64)
+    pn = imp.PhaseNoise(l0_dbc_hz=-70)
+    tg = rl.PointTarget.from_polar(20.0, 25.0, 0.0)
+    kw = dict(noise=False, snr_ref_db=20, ref_range=20.0)
+    clean = rl.synthesize_cube(cfg, [tg], **kw)
+    x = rl.synthesize_cube(cfg, [tg], phase_noise=pn, rng=np.random.default_rng(3), **kw)
+    res = np.angle(x / clean)
+    rx_per_tx = cfg.n_rx
+    for t in range(cfg.n_tx):       # channels of the same TX share the chirp timing -> identical residual
+        blk = res[t * rx_per_tx:(t + 1) * rx_per_tx]
+        np.testing.assert_allclose(blk, blk[:1].repeat(rx_per_tx, 0), atol=1e-12)
+    assert np.std(res) > 1e-3
+
+
+def test_leakage_shares_phase_noise_realisation():
+    """A leakage path at distance d and a target at range d acquire the same
+    residual φ(t) − φ(t − τ) inside one synthesised frame."""
+    cfg = _cfg(n_chirps=8, rx_pos=[0.0])
+    d = 30.0
+    pn = imp.PhaseNoise(l0_dbc_hz=-70)
+    phi = pn.realize(-1e-5, 1e-3, np.random.default_rng(9))
+    lk = rl.Leakage(distance=d, power_db=20.0, phase=[0.0])
+    a = rl.synthesize_cube(cfg, [], noise=False, leakage=lk, phase_noise=phi)
+    a0 = rl.synthesize_cube(cfg, [], noise=False, leakage=lk)
+    tg = rl.PointTarget((0, d, 0))
+    b = rl.synthesize_cube(cfg, [tg], noise=False, phase_noise=phi, snr_ref_db=20, ref_range=d)
+    b0 = rl.synthesize_cube(cfg, [tg], noise=False, snr_ref_db=20, ref_range=d)
+    np.testing.assert_allclose(np.angle(a / a0), np.angle(b / b0), atol=1e-9)
+    assert np.std(np.angle(a / a0)) > 1e-3
+
+
+def test_swerling1_shared_across_channels():
+    cfg = rl.automotive_77ghz().replace(n_chirps=8, n_samples=32)
+    tg = rl.PointTarget((0, 10.0, 0))
+    clean = rl.synthesize_cube(cfg, [tg], noise=False)
+    x = rl.synthesize_cube(cfg, [tg], noise=False, swerling=1, rng=4)
+    g = x / clean
+    np.testing.assert_allclose(g, g.flat[0], rtol=1e-9)      # one complex gain for all k, m, n
+
+
+def test_simulator_reduces_to_ideal_model_with_impairments_off():
+    """Fidelity §0.1 regression: 'snr' mode, all impairments off == brief formula."""
+    from radarlab.signal import beat_sample
+    cfg = _cfg()
+    tg = rl.PointTarget.from_polar(12.0, -14.0, 3.0)
+    c = rl.synthesize_cube(cfg, [tg], noise=False, swerling=0, phase_noise=None, leakage=None)
+    s = tg.scatterers(cfg.chirp_start_times()[0])
+    for m, n in [(0, 0), (5, 77), (31, 127)]:
+        p, v = s.pos[0, m], s.vel[0, m]
+        R = np.linalg.norm(p)
+        ref = beat_sample(cfg, R, p @ v / R, np.arctan2(p[0], p[1]), 1, m, n, A=rl.amplitude(1.0, R, cfg))
+        assert c[1, m, n] == pytest.approx(ref, rel=1e-10)

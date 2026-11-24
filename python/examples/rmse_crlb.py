@@ -10,7 +10,7 @@ cfg = rl.RadarConfig(fc=77e9, slope=20e12, fs=10e6, n_samples=32, chirp_period=2
                      tx_pos=[0.0], rx_pos=[0, .5, 1, 1.5], adc_start_time=1e-6, idle_time=2e-6, frame_period=1e-3)
 R0, th, v = 5.3, np.deg2rad(10.0), 0.0
 tg = rl.PointTarget.from_polar(R0, 10.0, v)
-w_true = np.array([np.pi * np.sin(th), 0.0, 2 * np.pi * cfg.slope * 2 * R0 / C0 / cfg.fs])
+w_true = np.array([-np.pi * np.sin(th), 0.0, 2 * np.pi * cfg.slope * 2 * R0 / C0 / cfg.fs])
 scale = np.array([1 / (np.pi * np.cos(th)), cfg.wavelength / (4 * np.pi * cfg.te), C0 * cfg.fs / (4 * np.pi * cfg.slope)])
 snrs = np.arange(-25, 6, 3.0)
 rng = np.random.default_rng(0)

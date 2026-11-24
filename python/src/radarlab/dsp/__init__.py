@@ -4,7 +4,7 @@ from .windows import get_window, coherent_gain, processing_loss_db, enbw_bins
 from .fft import (range_fft, doppler_fft, mti, rd_power, to_db, range_doppler,
                   bin_to_range, bin_to_velocity)
 from .cfar import (cfar_2d, cfar_1d, CfarResult, ca_alpha, os_alpha, gs_alpha, cfar_alpha,
-                   os_rank_index, os_pfa, go_pfa_beta, so_pfa_beta)
+                   os_rank_index, os_pfa, go_pfa_beta, so_pfa_beta, gs_pfa_beta)
 from .detect import (parabolic_offset, refine_peak, refine_peak_1d, Cluster, cluster_connected,
                      cluster_dbscan, local_maxima)
 from .doa import (tdm_phase, tdm_compensate, steering_vector, azimuth_ula, UlaSelection, angle_fft,

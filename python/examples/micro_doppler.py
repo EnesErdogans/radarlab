@@ -13,7 +13,7 @@ def spec(target, n_frames=40, seed=0):
     frames = [dsp.range_fft(rl.synthesize_cube(cfg, target, i * cfg.frame_period, snr_ref_db=45, rng=rng))
               for i in range(n_frames)]
     rb = int(round(np.linalg.norm(target.center([0.0])[0]) / cfg.range_resolution))
-    y = dsp.slow_time(frames, slice(rb - 1, rb + 2), 0, cfg)
+    y = dsp.slow_time(frames, rb, 0, cfg)
     return dsp.spectrogram(y, 1 / cfg.te, cfg.wavelength, nperseg=128, noverlap=112)
 
 

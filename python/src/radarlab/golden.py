@@ -11,9 +11,11 @@ Processing used for ``expected``/``rdPowerDb`` (TS must match):
   * P[r, d] = Σ_k |X[k, r, d]|², rdPowerDb = 10·log10(P) (floor 1e-30);
   * peaks: local maximum of P nearest to the analytic bin; fractional bins by
     parabolic interpolation on natural-log power;
-  * angle: TDM compensation with the fractional-bin velocity, rectangular
-    window, ``angleFftSize``-point zero-padded FFT over the azimuth ULA,
-    fftshift; angle bin a ↔ sinθ = (a − Na/2)/(Na·d).
+  * angle (conventionVersion 2): synthesis spatial phase is −2π(x_k sinθ cosφ
+    + z_k sinφ); TDM compensation with the fractional-bin velocity, rectangular
+    window, ``angleFftSize``-point zero-padded spectrum with the **+j kernel**
+    A[a] = Σ_k x_k·exp(+j2πka/Na) (= Na·IFFT) over the azimuth ULA, fftshift;
+    angle bin a ↔ sinθ = (a − Na/2)/(Na·d), θ > 0 → a > Na/2.
 """
 from __future__ import annotations
 
@@ -26,6 +28,7 @@ from .config import PRESETS, RadarConfig
 from .scene import PointTarget, Scene
 from .signal import synthesize_cube
 
+CONVENTION_VERSION = 2       # brief REVISION 1: negative spatial phase, +j angle kernel
 SNR_REF_DB = 20.0
 REF_RANGE = 10.0
 ANGLE_FFT = 64
@@ -103,11 +106,13 @@ def _case(name: str, desc: str, cfg: RadarConfig, scats: list[dict[str, float]],
     cube = synthesize_cube(cfg, _scene(scats), 0.0, "snr", SNR_REF_DB, REF_RANGE, noise=False)
     rf, rd, P = _process(cube, cfg)
     case: dict[str, Any] = {
-        "name": name, "description": desc, "config": cfg.to_dict(), "derived": cfg.derived(),
+        "name": name, "conventionVersion": CONVENTION_VERSION, "description": desc,
+        "config": cfg.to_dict(), "derived": cfg.derived(),
         "scatterers": scats, "amplitudeMode": "snr", "snrRefDb": SNR_REF_DB, "refRange": REF_RANGE,
         "noise": False, "tFrame": 0.0,
         "processing": {"rangeWindow": "hann", "dopplerWindow": "hann", "angleWindow": "rect",
-                       "angleFftSize": ANGLE_FFT, "peakInterpolation": "parabolic-log-power",
+                       "angleFftSize": ANGLE_FFT, "angleKernel": "+j (ifft*Na), fftshift",
+                       "peakInterpolation": "parabolic-log-power",
                        "tdmCompensation": True},
     }
     if full_cube:
@@ -183,17 +188,20 @@ def case_cfar_alpha() -> dict[str, Any]:
     ns = [8, 16, 24, 32, 48, 64, 128, 248]
     pfas = [1e-2, 1e-3, 1e-4, 1e-5, 1e-6]
     rows = []
-    for n in ns:
-        for pfa in pfas:
-            k = dsp.os_rank_index(n, 0.75)
-            rows.append({"n": n, "pfa": pfa, "ca": dsp.ca_alpha(n, pfa), "osK": k,
-                         "os": dsp.os_alpha(n, pfa, k), "go": dsp.gs_alpha(n // 2, pfa, "go"),
-                         "so": dsp.gs_alpha(n // 2, pfa, "so"),
-                         "caGammaK4": dsp.ca_alpha(n, pfa, 4)})
-    return {"name": "cfar_alpha", "description":
-            "CFAR threshold multipliers on the mean (CA, GO/SO: halves of n/2 cells) or on the k-th "
-            "order statistic (OS, k=round(0.75 n)); caGammaK4 is CA for 4 non-coherently summed channels.",
-            "osRank": 0.75, "table": rows, "tolerances": {"rel": 1e-9}}
+    for K in (1, 4, 8):
+        for n in ns:
+            for pfa in pfas:
+                k = dsp.os_rank_index(n, 0.75)
+                rows.append({"K": K, "n": n, "pfa": pfa, "osK": k,
+                             "ca": dsp.ca_alpha(n, pfa, K), "os": dsp.os_alpha(n, pfa, k, K),
+                             "go": dsp.gs_alpha(n // 2, pfa, "go", K), "so": dsp.gs_alpha(n // 2, pfa, "so", K)})
+    return {"name": "cfar_alpha", "conventionVersion": CONVENTION_VERSION, "description":
+            "CFAR threshold multipliers for K non-coherently summed channels (noise Gamma(K), exact). "
+            "CA and GO/SO multiply the mean of the training cells (GO/SO: of a half with n/2 cells); OS "
+            "multiplies the k-th smallest, k = round(0.75 n) (round-half-even). K=1: closed forms; K>1: "
+            "CA via betaincinv, OS/GO/SO via adaptive quadrature of the exact Gamma order-statistic / half-sum "
+            "integrals (rel. accuracy ~1e-9).",
+            "osRank": 0.75, "table": rows, "tolerances": {"rel": 1e-7}}
 
 
 def case_presets() -> dict[str, Any]:
@@ -204,7 +212,7 @@ def case_presets() -> dict[str, Any]:
                     "virtualPos": cfg.virtual_pos.tolist(), "virtualPosZ": cfg.virtual_pos_z.tolist(),
                     "rangeWindow": dsp.get_window("hann", cfg.n_samples).tolist(),
                     "dopplerWindow": dsp.get_window("hann", cfg.n_chirps).tolist()})
-    return {"name": "presets", "description": "Preset configs, derived quantities, periodic Hann windows",
+    return {"name": "presets", "conventionVersion": CONVENTION_VERSION, "description": "Preset configs, derived quantities, periodic Hann windows",
             "presets": out, "tolerances": {"rel": 1e-12}}
 
 

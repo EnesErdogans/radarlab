@@ -31,7 +31,7 @@ class ProcessingParams:
     cfar_train: tuple[int, int] = (8, 4)
     cfar_pfa: float = 1e-5
     cfar_os_rank: float = 0.75
-    cfar_gamma_exact: bool = False         # CA α for Gamma(K) noise
+    cfar_n_channels: int | None = None     # K for exact Gamma(K) α; None = number of channels summed in P
     clustering: str = "connected"          # 'connected' | 'dbscan' | 'peaks'
     dbscan_eps: float = 1.5
     max_detections: int = 256
@@ -84,7 +84,7 @@ def process_frame(cube: np.ndarray, cfg: RadarConfig, params: ProcessingParams |
     rd = dsp.doppler_fft(rf, p.doppler_window)
     P = dsp.rd_power(rd)
     cf = dsp.cfar_2d(P, p.cfar_guard, p.cfar_train, p.cfar_pfa, p.cfar_kind, p.cfar_os_rank,
-                     n_channels=rd.shape[0] if p.cfar_gamma_exact else 1)
+                     n_channels=rd.shape[0] if p.cfar_n_channels is None else p.cfar_n_channels)
     if p.clustering == "dbscan":
         cl = dsp.cluster_dbscan(cf.mask, P, p.dbscan_eps)
     elif p.clustering == "peaks":

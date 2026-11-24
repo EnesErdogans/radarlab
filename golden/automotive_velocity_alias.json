@@ -1,5 +1,6 @@
 {
  "name": "automotive_velocity_alias",
+ "conventionVersion": 2,
  "description": "target at vr = vmax + 3.3 dv = 15.9928 m/s appears aliased at negative velocity (TDM compensation with aliased v gives a biased angle; see angleDeg)",
  "config": {
   "fc": 77000000000.0,
@@ -63,6 +64,7 @@
   "dopplerWindow": "hann",
   "angleWindow": "rect",
   "angleFftSize": 64,
+  "angleKernel": "+j (ifft*Na), fftshift",
   "peakInterpolation": "parabolic-log-power",
   "tdmCompensation": true
  },
@@ -78,15 +80,15 @@
    "k": 7,
    "m": 127,
    "n": 255,
-   "re": 0.6746114009368094,
-   "im": -1.4325279859898243
+   "re": 1.544013676427,
+   "im": 0.35108224096978435
   },
   {
    "k": 4,
    "m": 42,
    "n": 51,
-   "re": 1.0033589447332172,
-   "im": -1.2391651514221849
+   "re": -1.507119144986654,
+   "im": -0.5204337876137743
   }
  ],
  "rdPowerDb": {
@@ -105,12 +107,12 @@
     "angleBin": 20,
     "rangeBinFrac": 64.43406046643025,
     "dopplerBinFrac": 3.4931763590780727,
-    "angleBinFrac": 20.423591328185825,
+    "angleBinFrac": 20.423960590718863,
     "range": 25.152142403843428,
     "velocity": -14.37852686901102,
-    "angleDeg": -21.208493354620884,
-    "angleDegNoTdmComp": -4.212937560652539,
-    "angleBinNoTdmComp": 30,
+    "angleDeg": -21.20778416060818,
+    "angleDegNoTdmComp": -15.895341542518539,
+    "angleBinNoTdmComp": 23,
     "powerDb": 10.659721599011737,
     "truth": {
      "range": 25.065506598777272,

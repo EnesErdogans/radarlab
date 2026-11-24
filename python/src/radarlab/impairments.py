@@ -9,7 +9,9 @@ r"""Hardware and propagation impairments (Phase 2).
 * :class:`PhaseNoise` — PLL-like phase noise, L(f) = L0/(1+(f/f_bw)²) + floor;
   the beat signal acquires φ(t) − φ(t−τ) (range-correlation effect; Budge &
   Burt, 1993), applied inside :func:`radarlab.signal.synthesize_cube`.
-* :func:`add_leakage` — TX→RX coupling as a static near-range scatterer.
+* :class:`~radarlab.signal.Leakage` / :func:`add_leakage` — TX→RX coupling as a
+  static near-DC path; synthesised inside ``synthesize_cube`` it shares the
+  frame's phase-noise realisation.
 * :func:`iq_imbalance` — y = I + j·g·(Q·cosδ − I·sinδ) ≡ μx + νx*,
   μ = (1 + g·e^{−jδ})/2, ν = (1 − g·e^{jδ})/2; IRR = |μ|²/|ν|².
 * :func:`two_ray` — flat-ground multipath (direct, 2× mixed, image paths).
@@ -27,7 +29,7 @@ import scipy.signal
 
 from .config import C0, RadarConfig
 from .scene import Scatterers, Scene, PointTarget
-from .signal import SceneLike, _scatter_fn, synthesize_cube
+from .signal import Leakage, SceneLike, _scatter_fn, synthesize_cube
 
 
 # ------------------------------------------------------------ RCS fluctuation
@@ -47,13 +49,18 @@ def swerling_gains(model: int, n_scat: int, n_tx: int, n_chirps: int,
 
 # ------------------------------------------------------------------- ADC
 def adc_quantize(x: np.ndarray, bits: int = 12, full_scale: float | None = None,
-                 return_codes: bool = False) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
+                 return_codes: bool = False, noise_rms_lsb: float | None = None,
+                 noise_var: float = 1.0) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
     """Uniform quantisation with clipping of each real rail to [−FS, FS).
 
     LSB = FS/2^(bits−1); codes are integers in [−2^(bits−1), 2^(bits−1)−1].
-    ``full_scale`` defaults to 4× the rms of one rail. Returns dequantised
-    data (and integer codes if ``return_codes``)."""
+    Full scale: ``noise_rms_lsb`` (fidelity §5) sets LSB = σ_I/noise_rms_lsb with
+    σ_I = sqrt(noise_var/2) (thermal-noise rms per rail); otherwise
+    ``full_scale``; otherwise 4× the rms of one rail. Returns dequantised data
+    (and integer codes if ``return_codes``)."""
     xr = np.asarray(x)
+    if noise_rms_lsb is not None:
+        full_scale = np.sqrt(noise_var / 2) / noise_rms_lsb * 2 ** (bits - 1)
     if full_scale is None:
         rails = np.concatenate([xr.real.ravel(), xr.imag.ravel()]) if np.iscomplexobj(xr) else xr.ravel()
         full_scale = 4 * float(np.sqrt(np.mean(rails ** 2)) or 1.0)
@@ -96,10 +103,15 @@ class PhaseNoise:
     ``realize`` draws φ(t) on a grid of rate ``fs_gen`` (FFT filtering of white
     noise, |H(f)|² = S_φ(f)·fs_gen) and returns a linear interpolator."""
 
-    l0_dbc_hz: float = -85.0
-    loop_bw_hz: float = 1e6
+    l0_dbc_hz: float = -87.0          # fidelity §1: L(1 MHz) ≈ −95 dBc/Hz (AWR1843)
+    loop_bw_hz: float = 450e3
     floor_dbc_hz: float = -140.0
-    fs_gen: float = 50e6
+    fs_gen: float = 50e6              # ≥ max(4·fs, 4·f_c)
+
+    def residual_variance(self, tau: float) -> float:
+        """Analytic var(φ(t) − φ(t−τ)) = ∫ L(f)·4·sin²(πfτ) df over ±fs_gen/2."""
+        f = np.linspace(-self.fs_gen / 2, self.fs_gen / 2, 400001)
+        return float(np.trapezoid(self.psd(f) * 4 * np.sin(np.pi * f * tau) ** 2, f))
 
     def psd(self, f: np.ndarray) -> np.ndarray:
         return 10 ** (self.l0_dbc_hz / 10) / (1 + (f / self.loop_bw_hz) ** 2) + 10 ** (self.floor_dbc_hz / 10)
@@ -116,11 +128,12 @@ class PhaseNoise:
 
 # ------------------------------------------------------------------ leakage
 def add_leakage(cube: np.ndarray, cfg: RadarConfig, distance: float = 0.05, power_db: float = 40.0,
-                phase0: float = 0.0, t_frame: float = 0.0) -> np.ndarray:
-    """Add TX→RX leakage: a static boresight scatterer at ``distance`` with
-    per-sample power ``power_db`` relative to the unit noise variance."""
-    leak = synthesize_cube(cfg, [PointTarget((0, distance, 0), rcs=1.0, phase0=phase0)], t_frame,
-                           snr_ref_db=power_db, ref_range=distance, noise=False)
+                seed: int = 0, t_frame: float = 0.0) -> np.ndarray:
+    """Add a phase-noise-free TX→RX leakage path to an existing cube.
+
+    To include the shared phase-noise residual (physically correct), pass
+    ``leakage=Leakage(...)`` to :func:`radarlab.signal.synthesize_cube` instead."""
+    leak = synthesize_cube(cfg, [], t_frame, noise=False, leakage=Leakage(distance, power_db, seed))
     return cube + leak
 
 
@@ -235,6 +248,6 @@ def fmcw_interference(cfg: RadarConfig, intf: FmcwInterferer, t_frame: float = 0
     sig = np.where(keep, A * np.exp(1j * (dphi + psi[(j - jmin).astype(int)])), 0)   # (nT, M, N)
     th = np.deg2rad(intf.theta_deg)
     # one-way: only the RX array phase (TX of the victim is irrelevant)
-    steer = np.exp(2j * np.pi * cfg.rx_pos * np.sin(th))
+    steer = np.exp(-2j * np.pi * cfg.rx_pos * np.sin(th))
     out = sig[:, None, :, :] * steer[None, :, None, None]
     return out.reshape(cfg.n_virtual, cfg.n_chirps, cfg.n_samples)

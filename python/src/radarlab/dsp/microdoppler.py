@@ -27,7 +27,10 @@ def slow_time(rfft_frames: np.ndarray | list[np.ndarray], range_bins: int | slic
     """Concatenate the slow-time signal of selected range bins over frames.
 
     rfft_frames : list of range-FFT cubes (K, M, Nr) or a single one.
-    range_bins : bin index, slice or array (coherently summed).
+    range_bins : bin index, slice or array (coherently summed). Prefer a
+        single bin: with a Hann range window, adjacent bins of one tone
+        alternate in phase, so their coherent sum nearly cancels and depends
+        on the sub-bin position (it approximates the windowed first sample).
     channels : channel(s) to coherently sum (None = all). With a multi-TX
         ``cfg`` only channels of TX ``tx`` are used so samples are spaced Te.
     """

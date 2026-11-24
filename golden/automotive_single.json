@@ -1,5 +1,6 @@
 {
  "name": "automotive_single",
+ "conventionVersion": 2,
  "description": "automotive_77ghz preset, single point target",
  "config": {
   "fc": 77000000000.0,
@@ -63,6 +64,7 @@
   "dopplerWindow": "hann",
   "angleWindow": "rect",
   "angleFftSize": 64,
+  "angleKernel": "+j (ifft*Na), fftshift",
   "peakInterpolation": "parabolic-log-power",
   "tdmCompensation": true
  },
@@ -78,19 +80,19 @@
    "k": 7,
    "m": 127,
    "n": 255,
-   "re": -0.666545900143814,
-   "im": 0.27428486318715795
+   "re": 0.7164150197956726,
+   "im": -0.0791526536718216
   },
   {
    "k": 4,
    "m": 42,
    "n": 51,
-   "re": 0.6622059467499379,
-   "im": 0.2811779589957798
+   "re": 0.08002385320027994,
+   "im": 0.7149642952308836
   }
  ],
  "rdPowerDb": {
-  "maxDb": 5.256636205545021,
+  "maxDb": 5.256636205545022,
   "maxCell": [
    95,
    37
@@ -105,13 +107,13 @@
     "angleBin": 39,
     "rangeBinFrac": 95.41399551903427,
     "dopplerBinFrac": 36.99088275650511,
-    "angleBinFrac": 38.652254274298535,
+    "angleBinFrac": 38.652188000347834,
     "range": 37.245307609703474,
     "velocity": -6.418306145080978,
-    "angleDeg": 11.99831625873206,
-    "angleDegNoTdmComp": 9.654929688899845,
-    "angleBinNoTdmComp": 37,
-    "powerDb": 5.256636205545021,
+    "angleDeg": 11.998194945461808,
+    "angleDegNoTdmComp": 14.36903048607147,
+    "angleBinNoTdmComp": 40,
+    "powerDb": 5.256636205545022,
     "truth": {
      "range": 37.2737856,
      "velocity": -6.4,

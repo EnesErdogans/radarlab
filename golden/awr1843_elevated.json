@@ -1,5 +1,6 @@
 {
  "name": "awr1843_elevated",
+ "conventionVersion": 2,
  "description": "awr1843_like 3TX (TX1 elevated by 0.5 lambda), target at 10 deg elevation",
  "config": {
   "fc": 77000000000.0,
@@ -69,6 +70,7 @@
   "dopplerWindow": "hann",
   "angleWindow": "rect",
   "angleFftSize": 64,
+  "angleKernel": "+j (ifft*Na), fftshift",
   "peakInterpolation": "parabolic-log-power",
   "tdmCompensation": true
  },
@@ -84,15 +86,15 @@
    "k": 11,
    "m": 63,
    "n": 255,
-   "re": 5.304527760678839,
-   "im": 3.5373746206520593
+   "re": 1.0424351215910446,
+   "im": 6.290020905205262
   },
   {
    "k": 6,
    "m": 21,
    "n": 51,
-   "re": -3.8841347727122018,
-   "im": 5.076380917282307
+   "re": -5.11361932778719,
+   "im": 3.8349763389649887
   }
  ],
  "rdPowerDb": {
@@ -111,12 +113,12 @@
     "angleBin": 22,
     "rangeBinFrac": 64.15826338048497,
     "dopplerBinFrac": 44.3254412328682,
-    "angleBinFrac": 22.260642996326794,
+    "angleBinFrac": 22.26474021901957,
     "range": 12.522241848858709,
     "velocity": 3.1242173321970608,
-    "angleDeg": -17.719357746954447,
-    "angleDegNoTdmComp": -14.799393830473933,
-    "angleBinNoTdmComp": 24,
+    "angleDeg": -17.711656498264077,
+    "angleDegNoTdmComp": -20.685982118762286,
+    "angleBinNoTdmComp": 21,
     "powerDb": 26.234599206335716,
     "truth": {
      "range": 12.511904,

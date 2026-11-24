@@ -21,9 +21,8 @@ Richards, *Fundamentals of Radar Signal Processing*, ch. 6)::
 
     threshold T: Pfa = Q_Γ(n, T)                      (regularised upper incomplete Γ)
     Swerling 0:  Pd = Q_{χ'²}(2T; 2n, 2n·snr)          (Marcum Q via scipy.stats.ncx2.sf)
-    Swerling 1:  Pd = ∫₀^∞ Pd_SW0(snr·s)·e^{−s} ds     (n = 1: Pd = Pfa^{1/(1+snr)})
-    Swerling 2:  Pd = Q_Γ(n, T/(1+snr))
-    Swerling 3:  Pd = ∫₀^∞ Pd_SW0(snr·s)·4s·e^{−2s} ds
+    Swerling 1/2/3: closed forms in :func:`pd_swerling` (fluctuation shared by
+    all K channels for SW1/SW3; independent per channel for SW2)
 """
 from __future__ import annotations
 
@@ -101,23 +100,60 @@ def _pd_fluct(snr: float, pfa: float, n: int, pdf) -> float:
     return float(scipy.integrate.quad(f, 0, np.inf, limit=200)[0])
 
 
-def pd_swerling(model: int, snr: np.ndarray | float, pfa: float, n: int = 1) -> np.ndarray:
-    """Pd for Swerling 0–3 (``snr`` = mean per-sample SNR, linear)."""
+def pd_swerling(model: int, snr: np.ndarray | float, pfa: float, n: int = 1,
+                method: str = "closed") -> np.ndarray:
+    """Pd for Swerling 0–3 with n = K non-coherently summed channels.
+
+    ``snr`` = mean per-channel SNR χ (linear). Fluctuations are *correlated*
+    across the K channels (one amplitude per frame shared by all virtual
+    channels, brief REVISION 1) except SW2 (independent per channel).
+    Closed forms (fidelity §8.1, Richards ch. 6):
+
+      SW1, K=1:  Pd = exp(−T/(1+χ)) = Pfa^{1/(1+χ)}
+      SW1, K≥2:  Pd = 1 − P(K−1,T) + (1+1/(Kχ))^{K−1}·P(K−1, T/(1+1/(Kχ)))·exp(−T/(1+Kχ))
+      SW2:       Pd = Q(K, T/(1+χ))
+      SW3, K=1:  Pd = (1 + 2Tχ/(2+χ)²)·exp(−2T/(2+χ))
+      SW3, K>1:  quadrature of SW0 over Gamma(2, χ/2)
+
+    (P = regularised lower incomplete gamma). ``method='integral'`` uses
+    quadrature of the SW0 Pd over the RCS pdf for SW1/SW3 (cross-check).
+    """
     snr = np.asarray(snr, float)
     if model == 0:
         return pd_swerling0(snr, pfa, n)
     T = threshold_noncoherent(pfa, n)
+    K = n
     if model == 2:
-        return scipy.special.gammaincc(n, T / (1 + snr))
+        return scipy.special.gammaincc(K, T / (1 + snr))
+    if model == 1 and method == "closed":
+        if K == 1:
+            return np.exp(-T / (1 + snr))
+        g = 1 + 1 / (K * snr)
+        return (1 - scipy.special.gammainc(K - 1, T)
+                + g ** (K - 1) * scipy.special.gammainc(K - 1, T / g) * np.exp(-T / (1 + K * snr)))
+    if model == 3 and method == "closed" and K == 1:
+        return (1 + 2 * T * snr / (2 + snr) ** 2) * np.exp(-2 * T / (2 + snr))
     if model == 1:
-        if n == 1:
-            return pfa ** (1 / (1 + snr))
         pdf = lambda s: np.exp(-s)
     elif model == 3:
         pdf = lambda s: 4 * s * np.exp(-2 * s)
     else:
         raise ValueError("Swerling model must be 0..3")
     return np.vectorize(lambda x: _pd_fluct(x, pfa, n, pdf))(snr)
+
+
+def pd_ca_cfar_swerling1(snr: np.ndarray | float, pfa: float, n_train: int) -> np.ndarray:
+    """CA-CFAR (K=1) Pd for a Swerling-1 target: (1 + α/(N(1+χ)))^{−N}."""
+    a = (n_train * (pfa ** (-1.0 / n_train) - 1.0))
+    return (1 + a / (n_train * (1 + np.asarray(snr, float)))) ** (-n_train)
+
+
+def binomial_ci(p: float, n: int, z: float = 1.96) -> tuple[float, float]:
+    """Wilson score interval for a proportion p from n trials."""
+    den = 1 + z ** 2 / n
+    c = (p + z ** 2 / (2 * n)) / den
+    h = z * np.sqrt(p * (1 - p) / n + z ** 2 / (4 * n ** 2)) / den
+    return float(c - h), float(c + h)
 
 
 def empirical_pfa(mask: np.ndarray, exclude: np.ndarray | None = None) -> float:

@@ -18,6 +18,47 @@ def test_os_alpha_satisfies_pfa():
         assert dsp.os_pfa(a, n, k) == pytest.approx(1e-4, rel=1e-8)
 
 
+def test_gamma_exact_matches_fidelity_values():
+    # fidelity_requirements §8.2 (MC-verified): K=4, N=16 -> 3.533; K=8, N=24 -> 2.535
+    assert dsp.ca_alpha(16, 1e-3, 4) == pytest.approx(3.533, abs=5e-4)
+    assert dsp.ca_alpha(24, 1e-3, 8) == pytest.approx(2.535, abs=5e-4)
+
+
+@pytest.mark.parametrize("kind", ["os", "go", "so"])
+def test_numeric_gamma_k_paths_reduce_to_closed_form(kind):
+    """The K>1 quadrature formulas evaluated at K=1 equal the closed forms."""
+    import scipy.integrate as si
+    import scipy.special as sp
+    import scipy.stats as st
+    n = 16
+    if kind == "os":
+        k = dsp.os_rank_index(n, 0.75)
+        a = dsp.os_alpha(n, 1e-4, k)
+        bd = st.beta(k, n - k + 1)
+        val = si.quad(lambda u: sp.gammaincc(1, a * sp.gammaincinv(1, u)) * bd.pdf(u), 0, 1, epsrel=1e-11)[0]
+    else:
+        b = dsp.gs_alpha(n // 2, 1e-4, kind) / (n // 2)
+        w = (lambda u: 2 * u) if kind == "go" else (lambda u: 2 * (1 - u))
+        val = sum(si.quad(lambda u: sp.gammaincc(1, b * sp.gammaincinv(n // 2, u)) * w(u), x, y, epsrel=1e-11)[0]
+                  for x, y in zip([0, .5, .99], [.5, .99, 1]))
+    assert val == pytest.approx(1e-4, rel=1e-6)
+
+
+@pytest.mark.parametrize("kind", ["os", "go", "so"])
+def test_empirical_pfa_gamma_k8(kind, rng):
+    pfa = 1e-2
+    P = rng.gamma(8.0, 1.0, (200, 512))
+    res = dsp.cfar_2d(P, (0, 1), (0, 8), pfa, kind, n_channels=8)
+    assert res.mask.mean() == pytest.approx(pfa, rel=0.15)
+
+
+def test_pipeline_default_uses_gamma_k():
+    import radarlab as rl
+    cfg = rl.automotive_77ghz().replace(n_chirps=32)
+    res = rl.process_frame(rl.synthesize_cube(cfg, [], rng=0), cfg)
+    assert res.cfar.alpha[100, 0] == pytest.approx(dsp.ca_alpha(int(res.cfar.n_train[100, 0]), 1e-5, 8))
+
+
 def test_gamma_exact_ca_reduces_to_closed_form():
     assert dsp.ca_alpha(16, 1e-4, 1) == pytest.approx(16 * (1e-4 ** (-1 / 16) - 1))
     # K=4 needs a lower α on the mean (noise averages over channels)

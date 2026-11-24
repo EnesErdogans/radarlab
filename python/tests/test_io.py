@@ -80,3 +80,29 @@ def test_sim_to_dca_and_process(tmp_path):
     back = read_dca1000(tmp_path / "x.bin", cfg)[0]
     res = rl.process_frame(back, cfg)
     assert abs(res.points[0]["range"] - 8.0) < cfg.range_resolution
+
+
+def test_closed_loop_cfg_sim_dca_process(tmp_path):
+    """.cfg -> simulate -> int16 DCA1000 .bin -> read back -> process: identical
+    cube codes and the same detections as processing the float cube."""
+    t = parse_ti_cfg(TI_CFG)
+    cfg = t.config.replace(n_chirps=32)
+    tgs = [rl.PointTarget.from_polar(5.0, -25.0, 2.0, rcs=5), rl.PointTarget.from_polar(9.5, 10.0, -1.0, rcs=5),
+           rl.PointTarget.from_polar(14.0, 30.0, 0.5, rcs=10)]
+    cube = rl.synthesize_cube(cfg, tgs, rng=5, snr_ref_db=25, ref_range=10)
+    _, codes = rl.impairments.adc_quantize(cube, bits=16, noise_rms_lsb=64.0, return_codes=True)
+    lsb = np.sqrt(0.5) / 64.0
+    write_dca1000(tmp_path / "adc_data.bin", codes, cfg)
+    back = read_dca1000(tmp_path / "adc_data.bin", cfg)[0]
+    np.testing.assert_array_equal(back, codes)
+    pp = rl.ProcessingParams(cfar_pfa=1e-6)
+    a = rl.process_frame(cube, cfg, pp).points
+    b = rl.process_frame(back * lsb, cfg, pp).points
+    sa = sorted(zip(a["range_cell"][a["snr_db"] > 20], a["doppler_cell"][a["snr_db"] > 20]))
+    sb = sorted(zip(b["range_cell"][b["snr_db"] > 20], b["doppler_cell"][b["snr_db"] > 20]))
+    assert sa == sb and len(sa) >= 3
+    for tg in tgs:
+        R = np.linalg.norm(tg.p0)
+        i = int(np.argmin(np.abs(b["range"] - R)))
+        assert abs(b["range"][i] - R) < cfg.range_resolution / 2
+        assert np.rad2deg(b["azimuth"][i]) == pytest.approx(np.rad2deg(np.arctan2(tg.p0[0], tg.p0[1])), abs=2.0)

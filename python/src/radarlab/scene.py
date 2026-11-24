@@ -18,12 +18,10 @@ Models
 * :class:`Pedestrian` — torso bob + pendulum arms/legs; gait period from the
   Boulic (1990) relation ``T = 1.346/sqrt(v/H_t)`` as used by V.C. Chen,
   *The Micro-Doppler Effect in Radar* (2nd ed., 2019), ch. 4 (simplified).
-* :class:`Drone` — multirotor; each blade is a rigid rod discretised into
-  point scatterers. Summing their returns is a midpoint-rule evaluation of the
-  rotating-blade integral of Martin & Mulgrew (1990), reproducing the
-  sinc-shaped "blade flashes" when a blade is normal to the line of sight
-  and a micro-Doppler extent of ±2·v_tip/λ, v_tip = Ω·L.
-* :class:`Bird` — body plus two flapping wings (rods, sinusoidal flap angle).
+* :class:`Drone` — multirotor; each blade is a uniform *line scatterer*
+  (Martin & Mulgrew 1990 closed form, sinc "blade flashes"), or optionally
+  discretised into points (reference). Micro-Doppler extent ±2·v_tip/λ.
+* :class:`Bird` — body plus two 2-segment flapping wings (fidelity §12.2).
 * :class:`ClutterField` / :func:`static_clutter` — many static scatterers.
 """
 from __future__ import annotations
@@ -50,6 +48,9 @@ class Scatterers:
     rcs : (S, T) RCS [m²]
     phase0 : (S,) scatterer phase φ0 [rad]
     label : (S,) integer target index inside a :class:`Scene` (or −1)
+    seg : optional (S, T, 3) line-segment vectors [m]. A non-zero ``seg``
+        makes the scatterer a uniform line of that length/direction centred
+        at ``pos`` (amplitude weighted by sinc, see ``signal.py``).
     """
 
     pos: np.ndarray
@@ -57,6 +58,7 @@ class Scatterers:
     rcs: np.ndarray
     phase0: np.ndarray
     label: np.ndarray
+    seg: np.ndarray | None = None
 
     @property
     def n(self) -> int:
@@ -85,14 +87,17 @@ class Scatterers:
         if not items:
             return Scatterers(np.zeros((0, 1, 3)), np.zeros((0, 1, 3)), np.zeros((0, 1)),
                               np.zeros(0), np.zeros(0, dtype=int))
+        seg = None
+        if any(i.seg is not None for i in items):
+            seg = np.concatenate([i.seg if i.seg is not None else np.zeros_like(i.pos) for i in items])
         return Scatterers(
             np.concatenate([i.pos for i in items]), np.concatenate([i.vel for i in items]),
             np.concatenate([i.rcs for i in items]), np.concatenate([i.phase0 for i in items]),
-            np.concatenate([i.label for i in items]))
+            np.concatenate([i.label for i in items]), seg)
 
     def subset(self, idx: slice | np.ndarray) -> "Scatterers":
         return Scatterers(self.pos[idx], self.vel[idx], self.rcs[idx], self.phase0[idx],
-                          self.label[idx])
+                          self.label[idx], None if self.seg is None else self.seg[idx])
 
 
 def _t1d(t: ArrayLike) -> np.ndarray:
@@ -157,18 +162,21 @@ class BodyTarget(Target):
         return self.trajectory(_t1d(t))[0]
 
     @abstractmethod
-    def _body(self, t: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """Return (pos_body (S,T,3), vel_body (S,T,3), rcs (S,) or (S,T), phase0 (S,))."""
+    def _body(self, t: np.ndarray) -> tuple:
+        """Return (pos_body (S,T,3), vel_body (S,T,3), rcs (S,) or (S,T), phase0 (S,)
+        [, seg_body (S,T,3)])."""
 
     def scatterers(self, t: ArrayLike) -> Scatterers:
         t = _t1d(t)
         pc, vc = self.trajectory(t)
-        pb, vb, rcs, ph = self._body(t)
+        out = self._body(t)
+        pb, vb, rcs, ph = out[:4]
         rot = self._rot()
         pos = pc[None] + pb @ rot.T
         vel = vc[None] + vb @ rot.T
+        seg = out[4] @ rot.T if len(out) > 4 else None
         rcs = np.broadcast_to(np.asarray(rcs, float).reshape(len(ph), -1), pos.shape[:2]).copy()
-        return Scatterers(pos, vel, rcs, np.asarray(ph, float), -np.ones(len(ph), dtype=int))
+        return Scatterers(pos, vel, rcs, np.asarray(ph, float), -np.ones(len(ph), dtype=int), seg)
 
 
 class PointTarget(BodyTarget):
@@ -326,37 +334,46 @@ class Pedestrian(BodyTarget):
 
 
 class Drone(BodyTarget):
-    """Multirotor UAV with rotating blades (discretised Martin & Mulgrew model).
+    """Multirotor UAV with rotating blades (Martin & Mulgrew line-blade model).
 
-    Each blade of length ``blade_length`` (from ``blade_root`` to the tip)
-    rotates in the horizontal body plane at Ω = 2π·rpm/60 about its rotor hub.
-    The blade is represented by P point scatterers at the midpoint radii
-    ``r_p = r0 + (p + ½)(L − r0)/P``. The coherent sum
+    Each blade (root r0 to tip L) rotates in the horizontal body plane at
+    Ω = 2π·rpm/60 about its rotor hub, blade k of a rotor at angle
+    ψ_k(t) = ψ0 + s·Ω·t + 2πk/N_b (s = ±1, alternating spin per rotor).
 
-        s(t) = Σ_p a·exp(j·4π/λ·(R0 + r_p·cos φ·cos(Ωt + ψ_k)))
+    ``blade_model='line'`` (default, fidelity §12.1 option a): each blade is
+    one *line scatterer* centred at radius (r0+L)/2 with segment vector
+    ℓ·(cosψ_k, sinψ_k, 0), ℓ = L − r0. The synthesiser weights it by
+    sinc(Φ_k), Φ_k = (2πℓ/λ)·(û_blade·û_LOS) — the closed-form uniform-blade
+    integral (Martin & Mulgrew 1990; Chen 2019):
 
-    is the midpoint-rule approximation of the Martin & Mulgrew (1990) blade
-    integral ``∫ exp(j4πr cos φ cos(Ωt+ψ_k)/λ) dr`` whose closed form is the
-    sinc "blade flash". P defaults to ``ceil(8·(L−r0)/λ_design)`` (two-way phase
-    step ≤ π/2 between points). Per-point RCS is ``σ_blade/P²`` so that the
-    fully coherent flash has RCS ``σ_blade``.
+        s_k(t) = A_b·exp(jΦ_k)·sinc(Φ_k)     (exp(jΦ_k) ≡ the blade-centre range term)
 
-    Max radial blade-tip speed v_tip = Ω·L, max micro-Doppler 2·v_tip/λ =
-    4π·f_rot·L/λ (for a radar in the rotor plane).
+    Blade flash (Φ_k = 0, blade ⟂ LOS) rate: N_b·f_rot for even N_b,
+    2·N_b·f_rot for odd N_b. Max micro-Doppler 2·Ω·L·cosβ/λ.
+
+    ``blade_model='points'`` (option b, reference): P point scatterers per
+    blade at midpoint radii, RCS σ_blade/P² each, P = ceil(8·ℓ/λ_design).
+    It also captures the blade's range extent; the two agree when L ≪ ΔR.
+
+    ``blade_rcs`` is the peak (flash) RCS of one blade. ``rpm_jitter`` draws
+    each rotor's rate from N(rpm, (rpm_jitter·rpm)²) (fidelity: 3 %).
     """
 
     def __init__(self, position: ArrayLike, velocity: ArrayLike = (0, 0, 0),
-                 n_rotors: int = 4, n_blades: int = 2, rpm: float | Sequence[float] = 6000.0,
-                 blade_length: float = 0.12, blade_root: float = 0.01,
+                 n_rotors: int = 4, n_blades: int = 2, rpm: float | Sequence[float] = 5400.0,
+                 blade_length: float = 0.12, blade_root: float = 0.0,
                  rotor_offsets: np.ndarray | None = None, arm_length: float = 0.25,
-                 body_rcs: float = 0.05, blade_rcs: float = 0.005,
-                 points_per_blade: int | None = None,
-                 design_wavelength: float = C0 / 24e9,
+                 body_rcs: float = 0.057, blade_rcs: float = 0.005,
+                 blade_model: str = "line", points_per_blade: int | None = None,
+                 design_wavelength: float = C0 / 24e9, rpm_jitter: float = 0.0,
                  accel: ArrayLike = (0, 0, 0), heading: float | None = None,
                  random_blade_phase: bool = True, seed: int | None = 0) -> None:
         super().__init__(position, velocity, accel, heading, seed)
         self.n_rotors, self.n_blades = int(n_rotors), int(n_blades)
-        self.rpm = np.broadcast_to(np.asarray(rpm, float), (self.n_rotors,)).copy()
+        rpm = np.broadcast_to(np.asarray(rpm, float), (self.n_rotors,)).copy()
+        if rpm_jitter:
+            rpm = rpm * (1 + rpm_jitter * self.rng.standard_normal(self.n_rotors))
+        self.rpm = rpm
         self.blade_length, self.blade_root = blade_length, blade_root
         if rotor_offsets is None:
             ang = np.pi / 4 + 2 * np.pi * np.arange(self.n_rotors) / self.n_rotors
@@ -364,13 +381,20 @@ class Drone(BodyTarget):
                                       np.full(self.n_rotors, 0.05)], -1)
         self.rotor_offsets = np.asarray(rotor_offsets, float).reshape(self.n_rotors, 3)
         self.direction = np.where(np.arange(self.n_rotors) % 2 == 0, 1.0, -1.0)
+        if blade_model not in ("line", "points"):
+            raise ValueError("blade_model must be 'line' or 'points'")
+        self.blade_model = blade_model
+        ell = blade_length - blade_root
         if points_per_blade is None:
-            points_per_blade = int(max(4, np.ceil(8 * (blade_length - blade_root) / design_wavelength)))
-        self.P = int(points_per_blade)
+            points_per_blade = int(max(4, np.ceil(8 * ell / design_wavelength)))
+        self.P = int(points_per_blade) if blade_model == "points" else 1
         self.body_rcs, self.blade_rcs = body_rcs, blade_rcs
         self.psi0 = (self.rng.uniform(0, 2 * np.pi, self.n_rotors) if random_blade_phase
                      else np.zeros(self.n_rotors))
-        self.radii = blade_root + (np.arange(self.P) + 0.5) * (blade_length - blade_root) / self.P
+        if blade_model == "points":
+            self.radii = blade_root + (np.arange(self.P) + 0.5) * ell / self.P
+        else:
+            self.radii = np.array([blade_root + 0.5 * ell])
 
     @property
     def omega(self) -> np.ndarray:
@@ -381,6 +405,11 @@ class Drone(BodyTarget):
     def tip_speed(self) -> np.ndarray:
         """v_tip = Ω·L [m/s]."""
         return self.omega * self.blade_length
+
+    def flash_rate(self) -> np.ndarray:
+        """Blade-flash rate per rotor [Hz]: N_b·f_rot (even N_b), 2·N_b·f_rot (odd)."""
+        f = self.rpm / 60.0
+        return f * self.n_blades * (1 if self.n_blades % 2 == 0 else 2)
 
     def _body(self, t: np.ndarray):
         T = t.size
@@ -395,51 +424,82 @@ class Drone(BodyTarget):
         pz = np.broadcast_to(self.rotor_offsets[:, 2, None, None, None], px.shape)
         vx = -r * s[:, :, None, :] * om[..., None]
         vy = r * c[:, :, None, :] * om[..., None]
-        blades_p = np.stack([px, py, pz], -1).reshape(R * B * P, T, 3)
-        blades_v = np.stack([vx, vy, np.zeros_like(vx)], -1).reshape(R * B * P, T, 3)
+        nb = R * B * P
+        blades_p = np.stack([px, py, pz], -1).reshape(nb, T, 3)
+        blades_v = np.stack([vx, vy, np.zeros_like(vx)], -1).reshape(nb, T, 3)
         pb = np.concatenate([np.zeros((1, T, 3)), blades_p])
         vb = np.concatenate([np.zeros((1, T, 3)), blades_v])
-        rcs = np.concatenate([[self.body_rcs], np.full(R * B * P, self.blade_rcs / P ** 2)])
-        ph = np.zeros(1 + R * B * P)
-        return pb, vb, rcs, ph
+        ph = np.zeros(1 + nb)
+        if self.blade_model == "points":
+            rcs = np.concatenate([[self.body_rcs], np.full(nb, self.blade_rcs / P ** 2)])
+            return pb, vb, rcs, ph
+        ell = self.blade_length - self.blade_root
+        seg = np.stack([ell * c, ell * s, np.zeros_like(c)], -1).reshape(R * B, T, 3)
+        seg = np.concatenate([np.zeros((1, T, 3)), seg])
+        rcs = np.concatenate([[self.body_rcs], np.full(nb, self.blade_rcs)])
+        return pb, vb, rcs, ph, seg
 
 
 class Bird(BodyTarget):
-    """Flapping bird: body + two wings as rods with flap angle A·sin(2πf t).
+    """Flapping bird (fidelity §12.2): body + two 2-segment wings.
 
-    Wings extend laterally (body x) from shoulder pivots and rotate in the
-    body x-z plane; each wing is discretised into ``points_per_wing`` points.
+    Shoulder angle ψ₁(t) = ψ_A·cos(2πf_w t) + ψ_off, elbow angle relative to
+    the inner segment ψ₂(t) = ψ_B·cos(2πf_w t − Δ). Each wing (lateral, body
+    ±x, hinged at ±w_s) flaps in the body x-z plane; scatterers at the inner-
+    segment midpoint, outer-segment midpoint and wing tip. Optional
+    intermittent flapping: flap for ``t_flap`` then glide (angles frozen at
+    ψ_off) for ``t_glide`` (Rahman & Robertson 2018).
+    Wingtip-only reference: f_mD(t) ∝ (2Lω/λ)·sin(ωt + φ₀) (Gong et al.).
     """
 
     def __init__(self, position: ArrayLike, velocity: ArrayLike = (0, 10, 0),
-                 wingspan: float = 0.6, flap_freq: float = 5.0, flap_amplitude: float = 0.6,
-                 body_rcs: float = 0.01, wing_rcs: float = 0.004, points_per_wing: int = 6,
+                 flap_freq: float = 5.0, inner_length: float = 0.12, outer_length: float = 0.13,
+                 shoulder_offset: float = 0.03, psi_a_deg: float = 40.0, psi_b_deg: float = 20.0,
+                 delta_deg: float = 30.0, psi_off_deg: float = 0.0,
+                 body_rcs: float = 0.005, wing_rcs: float = 0.002,
+                 t_flap: float | None = None, t_glide: float = 0.0,
                  accel: ArrayLike = (0, 0, 0), heading: float | None = None,
                  seed: int | None = 0) -> None:
         super().__init__(position, velocity, accel, heading, seed)
-        self.half_span = wingspan / 2
-        self.flap_freq, self.flap_amplitude = flap_freq, flap_amplitude
+        self.flap_freq = flap_freq
+        self.L1, self.L2, self.ws = inner_length, outer_length, shoulder_offset
+        self.psi_a, self.psi_b = np.deg2rad(psi_a_deg), np.deg2rad(psi_b_deg)
+        self.delta, self.psi_off = np.deg2rad(delta_deg), np.deg2rad(psi_off_deg)
         self.body_rcs, self.wing_rcs = body_rcs, wing_rcs
-        self.P = int(points_per_wing)
+        self.t_flap, self.t_glide = t_flap, t_glide
         self.flap_phase = self.rng.uniform(0, 2 * np.pi)
-        self.phase0 = self.rng.uniform(0, 2 * np.pi, 1 + 2 * self.P)
+        self.phase0 = self.rng.uniform(0, 2 * np.pi, 7)
+
+    @property
+    def wingspan(self) -> float:
+        return 2 * (self.ws + self.L1 + self.L2)
 
     def _body(self, t: np.ndarray):
-        T, P = t.size, self.P
+        T = t.size
         w = 2 * np.pi * self.flap_freq
-        a = self.flap_amplitude * np.sin(w * t + self.flap_phase)            # (T,)
-        ad = self.flap_amplitude * w * np.cos(w * t + self.flap_phase)
-        root = 0.03
-        s = root + (np.arange(P) + 0.5) * (self.half_span - root) / P         # (P,)
+        if self.t_flap is None:
+            gate = np.ones(T)
+        else:
+            gate = (np.mod(t, self.t_flap + self.t_glide) < self.t_flap).astype(float)
+        a = w * t + self.flap_phase
+        p1 = self.psi_off + gate * self.psi_a * np.cos(a)
+        p1d = -gate * self.psi_a * w * np.sin(a)
+        p2 = gate * self.psi_b * np.cos(a - self.delta)
+        p2d = -gate * self.psi_b * w * np.sin(a - self.delta)
+        q, qd = p1 + p2, p1d + p2d
         pos, vel = [np.zeros((1, T, 3))], [np.zeros((1, T, 3))]
-        for side in (-1.0, 1.0):
-            x = side * (root + s[:, None] * np.cos(a)[None])
-            z = s[:, None] * np.sin(a)[None]
-            vx = -side * s[:, None] * np.sin(a)[None] * ad[None]
-            vz = s[:, None] * np.cos(a)[None] * ad[None]
-            pos.append(np.stack([x, np.zeros_like(x), z], -1))
-            vel.append(np.stack([vx, np.zeros_like(vx), vz], -1))
-        rcs = np.concatenate([[self.body_rcs], np.full(2 * P, self.wing_rcs / P)])
+        for sd in (-1.0, 1.0):
+            d1 = np.stack([sd * np.cos(p1), np.zeros(T), np.sin(p1)], -1)
+            d1d = np.stack([-sd * np.sin(p1) * p1d, np.zeros(T), np.cos(p1) * p1d], -1)
+            d2 = np.stack([sd * np.cos(q), np.zeros(T), np.sin(q)], -1)
+            d2d = np.stack([-sd * np.sin(q) * qd, np.zeros(T), np.cos(q) * qd], -1)
+            sh = np.array([sd * self.ws, 0.0, 0.0])
+            elbow, elbowd = sh + self.L1 * d1, self.L1 * d1d
+            pos += [(sh + 0.5 * self.L1 * d1)[None], (elbow + 0.5 * self.L2 * d2)[None],
+                    (elbow + self.L2 * d2)[None]]
+            vel += [(0.5 * self.L1 * d1d)[None], (elbowd + 0.5 * self.L2 * d2d)[None],
+                    (elbowd + self.L2 * d2d)[None]]
+        rcs = np.concatenate([[self.body_rcs], np.full(6, self.wing_rcs / 3)])
         return np.concatenate(pos), np.concatenate(vel), rcs, self.phase0
 
 

@@ -1,12 +1,13 @@
 r"""Direction-of-arrival estimation and TDM-MIMO phase compensation.
 
-Steering vector (brief convention; positions in wavelengths)::
+Steering vector (brief convention version 2 / REVISION 1; positions in wavelengths)::
 
-    a_k(θ, φ) = exp( j·2π·(x_k·sinθ·cosφ + z_k·sinφ) )
+    a_k(θ, φ) = exp( −j·2π·(x_k·sinθ·cosφ + z_k·sinφ) )
 
-so a target at θ > 0 produces a positive spatial frequency and, after the
-forward FFT over a ULA of spacing d (wavelengths) and fftshift, a positive
-angle bin. Bin a of an Na-point FFT maps to ``sinθ = (a − Na/2)/(Na·d)``.
+(an element at +x is closer to a target at θ > 0). The angle spectrum uses the
+matched **+j kernel** A[a] = Σ_k x_k·exp(+j2πka/Na) (Na·IFFT) followed by
+fftshift, so a target at θ > 0 still lands in a bin > Na/2 and bin a maps to
+``sinθ = (a − Na/2)/(Na·d)``.
 
 TDM compensation (brief): TX t fires t·Tc after TX 0, so a target with radial
 velocity v acquires an extra phase 2π·(2v/λ)·t·Tc on TX-t channels; multiply
@@ -55,7 +56,7 @@ def steering_vector(pos_x: np.ndarray, theta: np.ndarray | float, phi: np.ndarra
     arg = px * (np.sin(th) * np.cos(ph))
     if pos_z is not None:
         arg = arg + np.asarray(pos_z, float).reshape((-1,) + (1,) * th.ndim) * np.sin(ph)
-    return np.exp(2j * np.pi * arg)
+    return np.exp(-2j * np.pi * arg)
 
 
 @dataclass
@@ -95,14 +96,17 @@ def azimuth_ula(cfg: RadarConfig, d: float | None = None) -> UlaSelection:
 
 
 def angle_fft(x: np.ndarray, ula: UlaSelection, n_fft: int = 64, window: str | None = None) -> np.ndarray:
-    """Zero-padded, fftshifted angle FFT over the ULA channels (axis 0).
+    """Zero-padded, fftshifted angle spectrum over the ULA channels (axis 0).
 
-    Normalised by Σw over the occupied slots. Output (n_fft, ...)."""
+    Uses the **+j kernel** A[a] = Σ_k g_k·exp(+j2π·k·a/Na) (= Na·IFFT), matched
+    to the steering vector exp(−j2π·x·sinθ), so θ > 0 maps to a bin > Na/2 and
+    a ↔ sinθ = (a − Na/2)/(Na·d). Normalised by Σw. Output (n_fft, ...)."""
     shp = (ula.n_slots,) + x.shape[1:]
     g = np.zeros(shp, dtype=complex)
     w = get_window(window, ula.n_slots)[ula.slot]
     g[ula.slot] = x[ula.index] * w.reshape((-1,) + (1,) * (x.ndim - 1))
-    X = np.fft.fft(g, n=n_fft, axis=0) / np.sum(w)
+    # +j kernel (matched to the −j steering vector): A[a] = Σ_k g_k·exp(+j2πka/Na)
+    X = np.fft.ifft(g, n=n_fft, axis=0) * (n_fft / np.sum(w))
     return np.fft.fftshift(X, axes=0)
 
 
@@ -178,7 +182,7 @@ def doa_spectrum(snap: np.ndarray, pos_x: np.ndarray, grid_deg: np.ndarray, meth
 
 def estimate_elevation(x: np.ndarray, cfg: RadarConfig) -> float:
     """Elevation φ [rad] from virtual pairs with identical x but different z:
-    φ = asin( arg(Σ conj(x_low)·x_high) / (2π·Δz) ). NaN if no such pairs.
+    φ = asin( −arg(Σ conj(x_low)·x_high) / (2π·Δz) ). NaN if no such pairs.
     (Assumes cosφ-scaled azimuth phase cancels within a pair.)"""
     xs, zs = cfg.virtual_pos, cfg.virtual_pos_z
     acc, dz = 0j, None
@@ -189,7 +193,7 @@ def estimate_elevation(x: np.ndarray, cfg: RadarConfig) -> float:
                 dz = zs[j] - zs[i]
     if dz is None:
         return float("nan")
-    return float(np.arcsin(np.clip(np.angle(acc) / (2 * np.pi * dz), -1, 1)))
+    return float(np.arcsin(np.clip(-np.angle(acc) / (2 * np.pi * dz), -1, 1)))
 
 
 def range_angle_map(rd: np.ndarray, cfg: RadarConfig, n_fft: int = 64, window: str | None = "hann",
