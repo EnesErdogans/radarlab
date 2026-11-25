@@ -15,6 +15,7 @@
   "cfar_maps.json",
   "clustering.json",
   "tracker.json",
-  "microdoppler_drone.json"
+  "microdoppler_drone.json",
+  "impairments.json"
  ]
 }

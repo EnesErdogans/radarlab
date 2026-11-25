@@ -25,6 +25,7 @@ the generated map itself is stored.
 | `clustering.json` | 12×10 mask + power map | 8-connected clustering with Doppler wrap: peak cell, size, member cells | exact |
 | `tracker.json` | 12 frames of [R, θ, vr] | Python EKF-CV tracker: state, covariance, status, hit history per frame | 1e-9 |
 | `microdoppler_drone.json` | fully-specified `Drone` (`target`) + full cube | **line-blade (sinc) rotor model**: beat cube and the range-FFT **slow-time** `y[m]` at the target range bin (rotor flashes) | cube 1e-9 of max, slow-time 1e-9 of max |
+| `impairments.json` | stored φ(t) grid, Swerling-1 gains, leakage phases (no RNG in the consumer) | **impairments** (roadmap A4): beat cube with shared phase noise φ(t) − φ(t−τ) on both scatterers and the Tx→Rx leakage path, Swerling-1 per-frame gains, then IQ imbalance → Butterworth IF HPF+LPF (order 2) → 8-bit ADC codes with clipping; `scipy.signal.butter` (b, a) for orders 1–4; analytic phase-noise residual variance | cube/chain 1e-9 of max, codes exact, butter rel 1e-10 |
 
 ### Truth tolerances (scenario files)
 
@@ -86,3 +87,17 @@ with the ported line-blade model (`sim/targets.ts` drone branch + the sinc weigh
   (`conventionVersion` 2).
 * Set 2 (2026-11-26, roadmap A3): adds `microdoppler_drone.json`, the first micro-Doppler
   cross-language vector — the line-blade (sinc) rotor model's beat cube and range-FFT slow-time.
+
+### Impairments (`impairments.json`, roadmap A4)
+
+Written by `case_impairments()` in `python/scripts/export_golden.py` and consumed by
+`web/tests/impairments.test.ts`. Every random input is stored: a phase-noise grid
+(`phi(t) = numpy.interp(t, t0 + i/fsGen, values)`, frame-relative time), one Swerling-1 complex
+gain per scatterer (the reference cube folds it into rcs·|g|² and phase0 + arg g, which the
+exporter checks equals `synthesize_cube(swerling=1)` for the same draws) and the leakage phase per
+virtual channel. The receiver chain is applied to the stored cube in the Python order
+`iq_imbalance` → `if_filter` → `adc_quantize`; the ADC full scale is chosen so that rails clip
+(`clippedRails` = rails whose unclipped code lies outside [−2^(b−1), 2^(b−1)−1]). The stochastic
+parts (phase-noise PSD and range correlation, Swerling 1/3 distributions) are checked
+statistically in the web tests, not here. `python/tests/test_golden_impairments.py` checks the file
+is up to date and replays it.
