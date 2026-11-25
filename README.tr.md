@@ -55,7 +55,7 @@ print(res.points[["range", "velocity", "azimuth", "snr_db"]])
 
 ## Web uygulaması
 
-Sekiz panel (kuşbakışı görünüm ve izler, chirp/IF sinyali, menzil profili, menzil–Doppler haritası ve CFAR, CFAR kesiti, menzil–açı haritası, mikro-Doppler spektrogramı, parametre bütçesi) ve sekiz adımlı Türkçe/İngilizce **Öğrenme modu** vardır. URL parametreleri: `?preset=micro|drone`, `?lang=tr`, `?learn=0..8`, `?paused`.
+Sekiz panel (kuşbakışı görünüm ve izler, chirp/IF sinyali, menzil profili, menzil–Doppler haritası ve CFAR, CFAR kesiti, menzil–açı haritası, mikro-Doppler spektrogramı, parametre bütçesi) ve dokuz adımlı Türkçe/İngilizce **Öğrenme modu** vardır. URL parametreleri: `?preset=micro|drone`, `?lang=tr`, `?learn=0..8`, `?paused`.
 
 ## Sınırlamalar
 

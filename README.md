@@ -425,7 +425,7 @@ The web application ([live demo](https://eneserdogans.github.io/radarlab/)) is w
 |---|---|
 | `?preset=micro` or `?preset=drone` | Start with the micro-Doppler or drone preset (default: automotive) |
 | `?lang=tr` | Turkish interface |
-| `?learn=0` … `?learn=7` | Open Learn mode at the given step |
+| `?learn=0` … `?learn=8` | Open Learn mode at the given step |
 | `?paused` | Start paused |
 
 **Performance.** Measured in Node on a 2-core sandbox ([`web/STATUS.md`](web/STATUS.md)):
