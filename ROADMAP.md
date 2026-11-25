@@ -6,7 +6,7 @@ Each scheduled session: clone the repo, read `docs/PROJECT_BRIEF.md`, this file,
 - [x] A1 Fix all critical/major findings in `docs/review/review_round1.md` (re-run the reviewer checks).
 - [x] A2 Web: exact Gamma(K) α for OS/GO/SO (match `golden/cfar_alpha.json` for K=1,4,8); enable those golden rows.
 - [x] A3 Web: line-blade (sinc) rotor model, matching Python; golden vector for a drone micro-Doppler slow-time sequence.
-- [ ] A4 Web: impairments toggles (phase noise w/ range correlation, ADC quantization, Tx→Rx leakage, Swerling 1) matching Python; golden vectors for deterministic parts.
+- [x] A4 Web: impairments toggles (phase noise w/ range correlation, ADC quantization, Tx→Rx leakage, Swerling 1) matching Python; golden vectors for deterministic parts.
 - [ ] A5 Web perf: measure synthesis; try WebAssembly (AssemblyScript or Rust→wasm SIMD) for synthesis + FFT; keep TS fallback; target ≥30 fps automotive.
 
 ## Phase B — real data
