@@ -28,3 +28,11 @@ Each scheduled session: clone the repo, read `docs/PROJECT_BRIEF.md`, this file,
 - [ ] E1 Impairments: `dc_offset`, `channel_gain` (+ calibration from a static target), slow random DC walk / 1/f IF noise (DC Doppler skirt), IF anti-alias LPF with oversampled synthesis (aliased far clutter), IQ-specific (asymmetric) HPF.
 - [ ] E2 Target models: speed-dependent gait swing amplitude; proper cyclist model; fit Swerling for human RCS fluctuation.
 - [ ] E3 Re-run the UW comparison with E1/E2 and update the report table.
+
+## Phase F — v1.0 vision: "LTspice for radar" (start AFTER the SIU paper, Phase C1, is submitted)
+Goal: a free, open-source, browser-based, block-diagram radar *system* simulator (behavioural/system level, like Keysight SystemVue or Cadence AWR VSS, which are commercial), where every block is validated against theory/real data. No free equivalent was found (GNU Radio is generic SDR, RadarSimPy has no schematic UI).
+- [ ] F1 Block abstraction: refactor the Python and TS engines into composable blocks with typed ports (waveform/chirp gen, PLL+phase noise, PA, antenna/array, channel/targets/clutter, LNA, mixer, IF HPF/LPF, ADC, DC/IQ impairments, range/Doppler FFT, MTI, CFAR, DoA, clustering, tracker, micro-Doppler STFT); a JSON netlist format shared by both engines; golden vectors per block.
+- [ ] F2 Schematic editor in the web app: drag-and-drop blocks, wires, parameter dialogs, probes/scopes on any wire (time, spectrum, RD map), save/load netlists, example library (automotive FMCW, drone K-band, TDM-MIMO, pulsed radar later).
+- [ ] F3 Analyses like SPICE: "sweep" (parameter sweep), "Monte-Carlo" (Pd/Pfa, RMSE), "budget" (link budget / noise figure cascade), with result plots and CSV export.
+- [ ] F4 Netlist ↔ Python: run any schematic headless in Python for batch research; TI .cfg import creates a schematic.
+- [ ] F5 Docs + tutorials, then JOSS / SoftwareX paper framed as the open radar system simulator.
