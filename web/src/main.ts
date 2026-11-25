@@ -30,6 +30,7 @@ function presetState(id: PresetId, keep?: Partial<State>): State {
   const p = PRESETS[id];
   const s = { ...defaultSettings(), ...p.settings, seed: keep?.s?.seed ?? 1 };
   s.cfar = { ...defaultSettings().cfar, ...(p.settings.cfar ?? {}) };
+  if (keep?.s?.imp) s.imp = { ...keep.s.imp, pn: { ...keep.s.imp.pn } };
   const targets = defaultScene(id);
   return {
     preset: id,
@@ -187,6 +188,7 @@ app.innerHTML = `
     <button data-tab="targets" class="on" data-i18n="tabTargets"></button>
     <button data-tab="radar" data-i18n="tabRadar"></button>
     <button data-tab="proc" data-i18n="tabProc"></button>
+    <button data-tab="imp" data-i18n="tabImp"></button>
   </div>
   <div class="tabpane on" id="tab-targets">
     <p class="hint" data-i18n="dragHint"></p>
@@ -195,6 +197,7 @@ app.innerHTML = `
   </div>
   <div class="tabpane" id="tab-radar"></div>
   <div class="tabpane" id="tab-proc"></div>
+  <div class="tabpane" id="tab-imp"></div>
 </aside>
 <main class="grid" id="grid">
   <div class="learn-card" id="learnCard"></div>
@@ -371,7 +374,8 @@ type FieldDef =
   | { kind: 'sel'; label: string; opts: [string, string][]; get: () => string; set: (v: string) => void }
   | { kind: 'chk'; label: string; get: () => boolean; set: (v: boolean) => void }
   | { kind: 'pair'; label: string; get: () => [number, number]; set: (a: number, b: number) => void }
-  | { kind: 'h'; label: string };
+  | { kind: 'h'; label: string }
+  | { kind: 'note'; html: string };
 
 function buildForm(el: HTMLElement, defs: FieldDef[], onChange: () => void): void {
   el.innerHTML = '';
@@ -380,6 +384,13 @@ function buildForm(el: HTMLElement, defs: FieldDef[], onChange: () => void): voi
       const h = document.createElement('h4');
       h.textContent = f.label;
       el.appendChild(h);
+      continue;
+    }
+    if (f.kind === 'note') {
+      const p = document.createElement('p');
+      p.className = 'note';
+      p.innerHTML = f.html;
+      el.appendChild(p);
       continue;
     }
     const row = document.createElement('label');
@@ -558,6 +569,50 @@ function buildEditors(): void {
     dirty = true;
   });
   cutPanel.activeType = s.cfar.type;
+
+  // impairments (roadmap A4; same models as the Python reference radarlab.impairments)
+  const im = s.imp;
+  const impDefs: FieldDef[] = [
+    { kind: 'note', html: t('impNote') },
+    { kind: 'h', label: t('impPn') },
+    { kind: 'chk', label: t('impOn'), get: () => im.phaseNoise, set: (v) => (im.phaseNoise = v) },
+    { kind: 'num', label: t('pnL0'), get: () => im.pn.l0DbcHz, set: (v) => (im.pn.l0DbcHz = v), step: 1, min: -140, max: -40 },
+    { kind: 'num', label: t('pnBw'), get: () => im.pn.loopBwHz / 1e3, set: (v) => (im.pn.loopBwHz = v * 1e3), step: 50, min: 1, max: 10000 },
+    { kind: 'num', label: t('pnFloor'), get: () => im.pn.floorDbcHz, set: (v) => (im.pn.floorDbcHz = v), step: 5, min: -400, max: -60 },
+    { kind: 'h', label: t('impLeak') },
+    { kind: 'chk', label: t('impOn'), get: () => im.leakage, set: (v) => (im.leakage = v) },
+    { kind: 'num', label: t('leakD'), get: () => im.leakDistance, set: (v) => (im.leakDistance = v), step: 0.05, min: 0, max: 10 },
+    { kind: 'num', label: t('leakP'), get: () => im.leakPowerDb, set: (v) => (im.leakPowerDb = v), step: 5, min: -20, max: 90 },
+    { kind: 'h', label: t('impSw') },
+    {
+      kind: 'sel',
+      label: t('swModel'),
+      opts: [
+        ['0', t('sw0')],
+        ['1', t('sw1')],
+        ['3', t('sw3')],
+      ],
+      get: () => String(im.swerling),
+      set: (v) => (im.swerling = +v as 0 | 1 | 3),
+    },
+    { kind: 'h', label: t('impIq') },
+    { kind: 'chk', label: t('impOn'), get: () => im.iq, set: (v) => (im.iq = v) },
+    { kind: 'num', label: t('iqG'), get: () => im.iqGainDb, set: (v) => (im.iqGainDb = v), step: 0.1, min: -6, max: 6 },
+    { kind: 'num', label: t('iqP'), get: () => im.iqPhaseDeg, set: (v) => (im.iqPhaseDeg = v), step: 0.5, min: -45, max: 45 },
+    { kind: 'h', label: t('impIf') },
+    { kind: 'chk', label: t('impOn'), get: () => im.ifFilter, set: (v) => (im.ifFilter = v) },
+    { kind: 'num', label: t('hpfL'), get: () => im.hpfHz / 1e3, set: (v) => (im.hpfHz = v * 1e3), step: 50, min: 0, max: 50000 },
+    { kind: 'num', label: t('lpfL'), get: () => im.lpfHz / 1e6, set: (v) => (im.lpfHz = v * 1e6), step: 0.5, min: 0, max: 100 },
+    { kind: 'sel', label: t('fOrd'), opts: ['1', '2', '3', '4'].map((v) => [v, v]), get: () => String(im.filterOrder), set: (v) => (im.filterOrder = +v) },
+    { kind: 'h', label: t('impAdc') },
+    { kind: 'chk', label: t('impOn'), get: () => im.adc, set: (v) => (im.adc = v) },
+    { kind: 'num', label: t('adcBits'), get: () => im.adcBits, set: (v) => (im.adcBits = Math.round(v)), step: 1, min: 2, max: 16 },
+    { kind: 'num', label: t('adcFs'), get: () => im.adcFullScaleDb, set: (v) => (im.adcFullScaleDb = v), step: 1, min: -20, max: 100 },
+  ];
+  buildForm($('tab-imp'), impDefs, () => {
+    setup();
+    dirty = true;
+  });
 }
 
 // ------------------------------------------------------------------ learn mode

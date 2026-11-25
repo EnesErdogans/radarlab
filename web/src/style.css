@@ -603,3 +603,12 @@ body.learn .learn-card {
     height: 360px;
   }
 }
+.tabpane p.note {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--dim);
+  margin: 0 0 8px;
+}
+.tabpane p.note code {
+  font-size: 11px;
+}

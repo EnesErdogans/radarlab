@@ -887,6 +887,7 @@ export class BudgetPanel extends Panel {
       row('bEff', `${(d.bEff / 1e6).toFixed(0)} MHz`) +
       row('lambda', `${(d.lambda * 1e3).toFixed(2)} mm`) +
       row('cube', `${d.nVirt}×${cfg.nChirps}×${cfg.nSamples}`) +
+      (meta.adcClipped > 0 ? row('adcClip', `${meta.adcClipped} (${((100 * meta.adcClipped) / (2 * d.nVirt * cfg.nChirps * cfg.nSamples)).toFixed(2)} %)`) : '') +
       '</table>';
     const ws = this.app.warnings();
     const warn =
