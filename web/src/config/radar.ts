@@ -1,6 +1,7 @@
 // Radar configuration, derived parameters and presets.
 // Field names follow docs/PROJECT_BRIEF.md (camelCase). SI units internally.
 
+import { defaultImpairments, type ImpairmentSettings } from '../sim/impairments';
 export const C0 = 299792458;
 
 export type IqMode = 'complex' | 'real';
@@ -166,6 +167,8 @@ export interface SimSettings {
   raWindow: WindowType; // angle window of the range–angle map (Python reference default: Hann)
   angleFft: number;
   maxDetections: number;
+  /** Hardware impairments (roadmap A4); all off by default. */
+  imp: ImpairmentSettings;
 }
 
 export function defaultSettings(): SimSettings {
@@ -187,6 +190,7 @@ export function defaultSettings(): SimSettings {
     raWindow: 'hann',
     angleFft: 64,
     maxDetections: 256,
+    imp: defaultImpairments(),
   };
 }
 

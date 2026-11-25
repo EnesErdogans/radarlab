@@ -114,6 +114,11 @@ describe('golden vectors (python reference)', () => {
     const g: Json = JSON.parse(readFileSync(join(dir, f), 'utf8'));
     const T = g.tolerances ?? {};
     describe(`${f}`, () => {
+      // impairments golden is consumed by tests/impairments.test.ts
+      if (g.kind === 'impairments') {
+        it('consumed by tests/impairments.test.ts', () => {});
+        return;
+      }
       // ---------- CFAR α table ----------
       if (Array.isArray(g.table)) {
         it('CFAR scale factors (CA, GO, SO, OS; K=1 closed forms and exact Gamma(K) for K>1)', () => {

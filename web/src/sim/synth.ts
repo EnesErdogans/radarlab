@@ -9,6 +9,7 @@
 import { C0, type Derived, type RadarConfig, type SimSettings } from '../config/radar';
 import { STRIDE, evalTarget, scattererCount, type Target } from './targets';
 import { Gaussian, NoisePool, hashSeed, mulberry32 } from './rng';
+import { leakagePhase, leakageTau, type PhaseNoiseGrid } from './impairments';
 
 const TWO_PI = 2 * Math.PI;
 
@@ -51,6 +52,14 @@ export class Synthesizer {
   private clutterRe: Float64Array | null = null; // K×N static clutter (identical for all chirps)
   private clutterIm: Float64Array | null = null;
   private clutterKey = '';
+  private clutterPts: Float64Array | null = null; // [x, y, z, rcs, phase0] per clutter scatterer
+  /** Phase-noise realisation of the current frame (frame-relative time); null = off. */
+  pn: PhaseNoiseGrid | null = null;
+  private pnT: Float64Array; // φ(t_c + t_f[n]) of the current chirp
+  private chirpT = 0;
+  /** Per-frame Swerling gains (interleaved re/im per scatterer, in synthesis order); null = SW0. */
+  private swPow: Float64Array | null = null;
+  private swPh: Float64Array | null = null;
 
   constructor(cfg: RadarConfig, d: Derived) {
     this.cfg = cfg;
@@ -61,6 +70,40 @@ export class Synthesizer {
     this.cr = new Float64Array(d.nRx);
     this.ci = new Float64Array(d.nRx);
     this.bases = new Int32Array(d.nRx);
+    this.pnT = new Float64Array(cfg.nSamples);
+  }
+
+  /** Set the start time of the chirp being synthesised (needed for phase noise). */
+  beginChirp(tc: number): void {
+    this.chirpT = tc;
+    const pn = this.pn;
+    if (!pn) return;
+    const N = this.cfg.nSamples,
+      fs = this.cfg.fs,
+      t0 = this.cfg.adcStartTime;
+    for (let n = 0; n < N; n++) this.pnT[n] = pn.eval(tc + t0 + n / fs);
+  }
+
+  /**
+   * Swerling 1/3: complex gains g_j (interleaved re/im) for the scatterers in synthesis order
+   * (points: list order; targets: target order, then scatterer order), one per frame, shared by
+   * all channels and chirps. null → Swerling 0.
+   */
+  setSwerlingGains(g: Float64Array | null, n = g ? g.length >> 1 : 0): void {
+    if (!g) {
+      this.swPow = this.swPh = null;
+      return;
+    }
+    if (!this.swPow || this.swPow.length < n) {
+      this.swPow = new Float64Array(n);
+      this.swPh = new Float64Array(n);
+    }
+    for (let i = 0; i < n; i++) {
+      const a = g[2 * i],
+        b = g[2 * i + 1];
+      this.swPow[i] = a * a + b * b;
+      this.swPh![i] = Math.atan2(b, a);
+    }
   }
 
   /**
@@ -152,6 +195,40 @@ export class Synthesizer {
         wr = nwr;
       }
     }
+    const pn = this.pn;
+    if (pn) {
+      // shared phase-noise realisation: this path gets φ(t) − φ(t − τ(t)), t = t_c + t_f
+      const pnT = this.pnT,
+        tc = this.chirpT;
+      // grid coordinate of t − τ = t_c + t_f(1 − a) − τ0 is linear in n: x_n = x0 + n·dx
+      const v = pn.v,
+        last = pn.n - 1,
+        idt = 1 / pn.dt;
+      const x0 = (tc + t0 * (1 - a) - tau0 - pn.t0) * idt,
+        dx = ((1 - a) / fs) * idt;
+      for (let n = 0; n < N; n++) {
+        const x = x0 + n * dx;
+        let ph: number;
+        if (x > 0 && x < last) {
+          const i = x | 0;
+          ph = v[i] + (x - i) * (v[i + 1] - v[i]);
+        } else ph = pn.eval(pn.t0 + x * pn.dt);
+        const dphi = pnT[n] - ph;
+        let c: number, sn: number;
+        if (!exact && dphi < 0.05 && dphi > -0.05) {
+          // UI mode: 6th/7th-order Taylor series, error < 3e-11 for |Δφ| < 0.05 rad
+          const q = dphi * dphi;
+          c = 1 - q * (0.5 - q * (1 / 24 - q / 720));
+          sn = dphi * (1 - q * (1 / 6 - q * (1 / 120 - q / 5040)));
+        } else {
+          c = Math.cos(dphi);
+          sn = Math.sin(dphi);
+        }
+        const zr = zRe[n];
+        zRe[n] = zr * c - zIm[n] * sn;
+        zIm[n] = zr * sn + zIm[n] * c;
+      }
+    }
     const nRx = d.nRx;
     const cr = this.cr,
       ci = this.ci,
@@ -191,12 +268,19 @@ export class Synthesizer {
       d = this.d;
     re.fill(0);
     im.fill(0);
+    const swP = this.swPow,
+      swF = this.swPh;
     for (let tx = 0; tx < d.nTx; tx++)
-      for (let m = 0; m < cfg.nChirps; m++)
-        for (const p of pts) {
-          const t = m * d.te + tx * cfg.chirpPeriod;
-          this.addScatterer(re, im, tx, m, p.x + p.vx * t, p.y + p.vy * t, p.z + p.vz * t, p.vx, p.vy, p.vz, p.rcs, p.phase0, s, exact);
+      for (let m = 0; m < cfg.nChirps; m++) {
+        const t = m * d.te + tx * cfg.chirpPeriod;
+        this.beginChirp(t);
+        for (let j = 0; j < pts.length; j++) {
+          const p = pts[j];
+          const rcs = swP ? p.rcs * swP[j] : p.rcs,
+            ph0 = swF ? p.phase0 + swF[j] : p.phase0;
+          this.addScatterer(re, im, tx, m, p.x + p.vx * t, p.y + p.vy * t, p.z + p.vz * t, p.vx, p.vy, p.vz, rcs, ph0, s, exact);
         }
+      }
   }
 
   /** Synthesize all targets (bulk state at frame start, micro-motion at absolute time simTime). */
@@ -209,15 +293,21 @@ export class Synthesizer {
     for (const tg of targets) maxNs = Math.max(maxNs, scattererCount(tg));
     if (this.scat.length < maxNs * STRIDE) this.scat = new Float64Array(maxNs * STRIDE);
     const sc = this.scat;
+    const swP = this.swPow,
+      swF = this.swPh;
     // chirp-major loop order: the K_rx×N block of one chirp stays in cache while all scatterers are added
     for (let tx = 0; tx < d.nTx; tx++)
       for (let m = 0; m < cfg.nChirps; m++) {
         const t = m * d.te + tx * cfg.chirpPeriod;
+        this.beginChirp(t);
+        let j = 0;
         for (const tg of targets) {
           const ns = evalTarget(tg, t, sc, 0, simTime);
-          for (let i = 0; i < ns; i++) {
+          for (let i = 0; i < ns; i++, j++) {
             const o = i * STRIDE;
-            this.addScatterer(re, im, tx, m, sc[o], sc[o + 1], sc[o + 2], sc[o + 3], sc[o + 4], sc[o + 5], sc[o + 6], sc[o + 7], s, exact, sc[o + 8], sc[o + 9], sc[o + 10]);
+            const rcs = swP ? sc[o + 6] * swP[j] : sc[o + 6],
+              ph0 = swF ? sc[o + 7] + swF[j] : sc[o + 7];
+            this.addScatterer(re, im, tx, m, sc[o], sc[o + 1], sc[o + 2], sc[o + 3], sc[o + 4], sc[o + 5], rcs, ph0, s, exact, sc[o + 8], sc[o + 9], sc[o + 10]);
           }
         }
       }
@@ -239,14 +329,32 @@ export class Synthesizer {
       const one = new Synthesizer({ ...cfg, nChirps: 1 }, { ...d });
       const rng = mulberry32(hashSeed(s.seed, 7777));
       const rmax = d.rMax;
+      const pts = new Float64Array(5 * s.nClutter);
       for (let i = 0; i < s.nClutter; i++) {
         const r = 0.08 * rmax + rng() * 0.85 * rmax;
         const az = (rng() * 2 - 1) * Math.min(70, d.fovDeg) * (Math.PI / 180);
         const rcs = Math.pow(10, (rng() * 25 - 5) / 10) * Math.pow(r / s.refRange, 1.2); // larger patches far away
-        for (let tx = 0; tx < d.nTx; tx++) one.addScatterer(cr, ci, tx, 0, r * Math.sin(az), r * Math.cos(az), -0.5, 0, 0, 0, rcs, rng() * TWO_PI, s, false);
+        const ph = rng() * TWO_PI;
+        pts.set([r * Math.sin(az), r * Math.cos(az), -0.5, rcs, ph], 5 * i);
+        for (let tx = 0; tx < d.nTx; tx++) one.addScatterer(cr, ci, tx, 0, pts[5 * i], pts[5 * i + 1], -0.5, 0, 0, 0, rcs, ph, s, false);
       }
       this.clutterRe = cr;
       this.clutterIm = ci;
+      this.clutterPts = pts;
+    }
+    if (this.pn) {
+      // with phase noise every chirp differs (shared realisation): synthesise per chirp
+      const pts = this.clutterPts!,
+        nc = pts.length / 5;
+      for (let tx = 0; tx < d.nTx; tx++)
+        for (let m = 0; m < M; m++) {
+          this.beginChirp(m * d.te + tx * cfg.chirpPeriod);
+          for (let i = 0; i < nc; i++) {
+            const o = 5 * i;
+            this.addScatterer(re, im, tx, m, pts[o], pts[o + 1], pts[o + 2], 0, 0, 0, pts[o + 3], pts[o + 4], s, false);
+          }
+        }
+      return;
     }
     const cr = this.clutterRe!,
       ci = this.clutterIm!;
@@ -257,6 +365,52 @@ export class Synthesizer {
         for (let n = 0; n < N; n++) {
           re[base + n] += cr[cb + n];
           im[base + n] += ci[cb + n];
+        }
+      }
+  }
+
+  /**
+   * Tx→Rx leakage (Python `signal.Leakage`): a static path with τ_L = 2·distance/c, amplitude
+   * 10^(powerDb/20), no spatial term, fixed phase `phases[k]` per virtual channel, and the frame's
+   * shared phase-noise residual φ(t) − φ(t − τ_L).
+   */
+  addLeakage(re: Float64Array, im: Float64Array, distance: number, powerDb: number, phases: ArrayLike<number>): void {
+    const cfg = this.cfg,
+      d = this.d;
+    const N = cfg.nSamples,
+      M = cfg.nChirps,
+      nRx = d.nRx,
+      fs = cfg.fs,
+      t0 = cfg.adcStartTime;
+    const tau = leakageTau(distance);
+    const A = Math.pow(10, powerDb / 20);
+    const real = cfg.iqMode === 'real';
+    const zr = this.zRe,
+      zi = this.zIm;
+    let ready = false;
+    for (let tx = 0; tx < d.nTx; tx++)
+      for (let m = 0; m < M; m++) {
+        const tc = m * d.te + tx * cfg.chirpPeriod;
+        if (this.pn || !ready) {
+          this.beginChirp(tc);
+          for (let n = 0; n < N; n++) {
+            const tf = t0 + n / fs;
+            let psi = leakagePhase(cfg.fc, cfg.slope, tau, tf);
+            if (this.pn) psi += this.pnT[n] - this.pn.eval(tc + tf - tau);
+            zr[n] = Math.cos(psi);
+            zi[n] = Math.sin(psi);
+          }
+          ready = true;
+        }
+        for (let r = 0; r < nRx; r++) {
+          const k = tx * nRx + r;
+          const a = A * Math.cos(phases[k]),
+            b = A * Math.sin(phases[k]);
+          const base = (k * M + m) * N;
+          for (let n = 0; n < N; n++) {
+            re[base + n] += a * zr[n] - b * zi[n];
+            if (!real) im[base + n] += a * zi[n] + b * zr[n];
+          }
         }
       }
   }

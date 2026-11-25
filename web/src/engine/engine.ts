@@ -7,10 +7,12 @@ import { Cfar2D } from '../dsp/cfar';
 import { Detector, type Detection } from '../dsp/detect';
 import { Spectrogram } from '../dsp/spectrogram';
 import { Synthesizer, type PointScatterer } from '../sim/synth';
-import { targetKinematics, maxMicroRadialSpeed, type Target } from '../sim/targets';
+import { Gaussian, hashSeed, mulberry32 } from '../sim/rng';
+import { PhaseNoiseGenerator, adcQuantize, butter, iqImbalance, lfilterRows, swerlingGains } from '../sim/impairments';
+import { targetKinematics, maxMicroRadialSpeed, scattererCount, type Target } from '../sim/targets';
 import { Tracker, mergeDetections } from '../track/tracker';
 
-export const STAGES = ['synth', 'noise', 'rangeFft', 'mti', 'dopplerFft', 'cfar', 'cluster', 'track', 'raMap', 'microDoppler', 'pack'] as const;
+export const STAGES = ['synth', 'noise', 'impair', 'rangeFft', 'mti', 'dopplerFft', 'cfar', 'cluster', 'track', 'raMap', 'microDoppler', 'pack'] as const;
 export type Stage = (typeof STAGES)[number];
 
 /** Transferable output buffers (Float32) for the UI. */
@@ -83,6 +85,7 @@ export interface FrameMeta {
   timings: Record<Stage, number>;
   cfarCount: number;
   noiseFloorDb: number;
+  adcClipped: number; // rail samples clipped by the ADC model this frame
 }
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -121,6 +124,12 @@ export class Engine {
   private seqIm: Float64Array;
   private cutThr: Float64Array;
   timings: Record<Stage, number>;
+  private pnGen = new PhaseNoiseGenerator();
+  private swBuf: Float64Array | null = null;
+  private leakPh: Float64Array | null = null;
+  private leakSeed = -1;
+  /** Rail samples clipped by the ADC in the last frame (0 if the ADC model is off). */
+  adcClipped = 0;
 
   constructor(cfg: RadarConfig, s: SimSettings, targets: Target[]) {
     this.cfg = cfg;
@@ -204,14 +213,30 @@ export class Engine {
     const re = this.cubeRe,
       im = this.cubeIm;
     let t0 = now();
+    const imp = s.imp;
+    this.prepareFrameImpairments();
     if (this.points) this.synth.synthPoints(re, im, this.points, s, exactSynth);
     else this.synth.synthTargets(re, im, this.targets, this.time, s, exactSynth);
     if (s.clutter && s.nClutter > 0) this.synth.addClutter(re, im, s);
+    if (imp?.leakage) {
+      if (!this.leakPh || this.leakSeed !== s.seed) {
+        // fixed random phase per virtual channel, identical every frame (as Python `Leakage`)
+        const r = mulberry32(hashSeed(s.seed, 0x1ea4));
+        this.leakPh = Float64Array.from({ length: K }, () => 2 * Math.PI * r());
+        this.leakSeed = s.seed;
+      }
+      this.synth.addLeakage(re, im, imp.leakDistance, imp.leakPowerDb, this.leakPh);
+    }
     let t1 = now();
     this.timings.synth = t1 - t0;
     if (s.noise) this.synth.addNoise(re, im, s, this.frame);
     t0 = now();
     this.timings.noise = t0 - t1;
+    this.adcClipped = 0;
+    if (imp) this.applyReceiverImpairments(re, im);
+    t1 = now();
+    this.timings.impair = t1 - t0;
+    t0 = t1;
     if (out) {
       // raw IF snapshot: virtual channel 0, chirp 0
       for (let n = 0; n < N; n++) {
@@ -299,6 +324,57 @@ export class Engine {
       }
     t1 = now();
     this.timings.dopplerFft = t1 - t0;
+  }
+
+  /** Per-frame random impairment state: phase-noise realisation and Swerling gains. */
+  prepareFrameImpairments(): void {
+    const imp = this.s.imp,
+      cfg = this.cfg,
+      d = this.d,
+      seed = this.s.seed;
+    if (imp?.phaseNoise) {
+      const starts: number[] = [];
+      for (let m = 0; m < cfg.nChirps; m++) for (let tx = 0; tx < d.nTx; tx++) starts.push(m * d.te + tx * cfg.chirpPeriod);
+      let rMaxScene = 2 * d.rMax;
+      for (const t of this.targets) rMaxScene = Math.max(rMaxScene, Math.hypot(t.x, t.y, t.z) + 10);
+      if (this.points) for (const p of this.points) rMaxScene = Math.max(rMaxScene, Math.hypot(p.x, p.y, p.z) + Math.hypot(p.vx, p.vy, p.vz) * d.frameActive + 1);
+      if (imp.leakage) rMaxScene = Math.max(rMaxScene, imp.leakDistance);
+      const tauMax = (2 * rMaxScene) / 299792458;
+      const g = new Gaussian(hashSeed(seed ^ 0x9a5e, this.frame));
+      this.synth.pn = this.pnGen.generate(imp.pn, starts, cfg.adcStartTime - tauMax, cfg.adcStartTime + (cfg.nSamples - 1) / cfg.fs, g);
+    } else this.synth.pn = null;
+    if (imp && imp.swerling !== 0) {
+      const n = this.points ? this.points.length : this.targets.reduce((a, t) => a + scattererCount(t), 0);
+      const g = new Gaussian(hashSeed(seed ^ 0x5e71, this.frame));
+      this.swBuf = swerlingGains(imp.swerling, n, g, this.swBuf ?? undefined);
+      this.synth.setSwerlingGains(this.swBuf, n);
+    } else this.synth.setSwerlingGains(null);
+  }
+
+  /** Receiver chain after the antenna/noise: IQ imbalance → IF filter → ADC (Python order). */
+  applyReceiverImpairments(re: Float64Array, im: Float64Array): void {
+    const imp = this.s.imp,
+      cfg = this.cfg;
+    const len = re.length,
+      N = cfg.nSamples,
+      rows = len / N;
+    const real = cfg.iqMode === 'real';
+    if (imp.iq && !real) iqImbalance(re, im, len, imp.iqGainDb, imp.iqPhaseDeg);
+    if (imp.ifFilter) {
+      const nyq = cfg.fs / 2;
+      const order = Math.max(1, Math.min(6, Math.round(imp.filterOrder)));
+      if (imp.hpfHz > 0 && imp.hpfHz < nyq) {
+        const { b, a } = butter(order, imp.hpfHz / nyq, 'highpass');
+        lfilterRows(re, rows, N, b, a);
+        if (!real) lfilterRows(im, rows, N, b, a);
+      }
+      if (imp.lpfHz > 0 && imp.lpfHz < nyq) {
+        const { b, a } = butter(order, imp.lpfHz / nyq, 'lowpass');
+        lfilterRows(re, rows, N, b, a);
+        if (!real) lfilterRows(im, rows, N, b, a);
+      }
+    }
+    if (imp.adc) this.adcClipped = adcQuantize(re, real ? null : im, len, Math.round(imp.adcBits), Math.pow(10, imp.adcFullScaleDb / 20));
   }
 
   /** Run one complete frame; fills `out` (if given) and returns metadata. Advances the scene. */
@@ -412,6 +488,7 @@ export class Engine {
       timings: { ...this.timings },
       cfarCount: cf.count,
       noiseFloorDb: floorDb,
+      adcClipped: this.adcClipped,
     };
     if (advance) this.advance();
     return meta;
