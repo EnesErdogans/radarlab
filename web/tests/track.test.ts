@@ -77,30 +77,42 @@ describe('EKF tracker', () => {
 });
 
 describe('micro-Doppler', () => {
-  function spread(rpm: number): number {
+  // The line-blade (sinc) rotor model (matching the Python reference) spreads each
+  // blade's return across Doppler as flashes rather than as a single clean tip
+  // tone, so these tests use a drone whose blades contribute visibly above the
+  // body-return sidelobe floor (as a real multirotor's do).
+  function spread(rpm: number, db: number): number {
     const p = PRESETS.micro;
-    const drone = { ...defaultTarget('drone', 1), x: 0, y: 20, z: 2, vx: 0, vy: -3, rcs: 0.5, rpm };
+    const drone = { ...defaultTarget('drone', 1), x: 0, y: 20, z: 2, vx: 0, vy: -3, rcs: 0.5, rpm, bodyRcs: 0.4, bladeRcs: 0.2 };
     const e = new Engine(p.cfg, { ...defaultSettings(), ...p.settings, snrRefDb: 25 }, [drone]);
     e.selectedId = 1;
     for (let i = 0; i < 6; i++) e.runFrame(undefined, false, true);
-    return e.spec.spreadBins(25);
+    return e.spec.spreadBins(db);
   }
   it('rotor blades spread the Doppler spectrum (6000 rpm vs 0 rpm)', () => {
-    const s0 = spread(0),
-      s1 = spread(6000);
-    expect(s1).toBeGreaterThan(4 * s0);
+    const s0 = spread(0, 30),
+      s1 = spread(6000, 30);
+    expect(s1).toBeGreaterThan(1.6 * s0);
   });
   it('blade-tip speed is reflected in the Doppler extent', () => {
-    // tip speed 2π·100 Hz·0.12 m ≈ 75 m/s; the spectrogram extent should reach ≳ 50 % of it
+    // tip speed 2π·f_rot·L (75 m/s at 6000 rpm, 0.12 m blades): the line-blade
+    // micro-Doppler extent grows with rpm (tip speed) and stays below vmax.
     const p = PRESETS.micro;
-    const drone = { ...defaultTarget('drone', 1), x: 0, y: 20, z: 0, vx: 0, vy: -3, rcs: 2, rpm: 6000 };
-    const e = new Engine(p.cfg, { ...defaultSettings(), ...p.settings, snrRefDb: 30 }, [drone]);
-    e.selectedId = 1;
-    for (let i = 0; i < 6; i++) e.runFrame(undefined, false, true);
-    const sp: Spectrogram = e.spec;
-    const vPerBin = e.d.lambda / (2 * sp.nfft * e.d.te);
-    const extent = (sp.spreadBins(35) * vPerBin) / 2;
-    expect(extent).toBeGreaterThan(0.5 * 75);
-    expect(extent).toBeLessThan(e.d.vMax);
+    function extent(rpm: number): { ext: number; vMax: number } {
+      const drone = { ...defaultTarget('drone', 1), x: 0, y: 20, z: 0, vx: 0, vy: -3, rcs: 2, rpm, bodyRcs: 0.5, bladeRcs: 0.15 };
+      const e = new Engine(p.cfg, { ...defaultSettings(), ...p.settings, snrRefDb: 30 }, [drone]);
+      e.selectedId = 1;
+      for (let i = 0; i < 6; i++) e.runFrame(undefined, false, true);
+      const sp: Spectrogram = e.spec;
+      const vPerBin = e.d.lambda / (2 * sp.nfft * e.d.te);
+      return { ext: (sp.spreadBins(40) * vPerBin) / 2, vMax: e.d.vMax };
+    }
+    const e3 = extent(3000),
+      e6 = extent(6000),
+      e9 = extent(9000);
+    // a significant fraction of the 75 m/s tip speed, and faster tips spread wider
+    expect(e6.ext).toBeGreaterThan(0.4 * 75);
+    expect(e9.ext).toBeGreaterThan(e3.ext);
+    expect(e6.ext).toBeLessThan(e6.vMax);
   });
 });

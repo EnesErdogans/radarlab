@@ -82,6 +82,9 @@ export class Synthesizer {
     phase0: number,
     s: SimSettings,
     exact: boolean,
+    segx = 0,
+    segy = 0,
+    segz = 0,
   ): void {
     const cfg = this.cfg,
       d = this.d;
@@ -90,7 +93,13 @@ export class Synthesizer {
     const R = Math.sqrt(px * px + py * py + pz * pz);
     if (R < 1e-3) return;
     const vr = (px * vx + py * vy + pz * vz) / R;
-    const A = amplitudeFor(rcs, R, s, cfg, d.lambda);
+    let A = amplitudeFor(rcs, R, s, cfg, d.lambda);
+    // Line scatterer (e.g. rotor blade): weight by the uniform-blade sinc integral
+    //   A ← A·sinc(Φ), Φ = (2π/λ)·(seg·û_LOS) = (2π/λ)·(seg·p)/R  (Martin & Mulgrew 1990).
+    if (segx !== 0 || segy !== 0 || segz !== 0) {
+      const Phi = ((TWO_PI / d.lambda) * (segx * px + segy * py + segz * pz)) / R;
+      A *= Phi === 0 ? 1 : Math.sin(Phi) / Phi;
+    }
     const S = cfg.slope,
       fc = cfg.fc,
       fs = cfg.fs,
@@ -208,7 +217,7 @@ export class Synthesizer {
           const ns = evalTarget(tg, t, sc, 0, simTime);
           for (let i = 0; i < ns; i++) {
             const o = i * STRIDE;
-            this.addScatterer(re, im, tx, m, sc[o], sc[o + 1], sc[o + 2], sc[o + 3], sc[o + 4], sc[o + 5], sc[o + 6], sc[o + 7], s, exact);
+            this.addScatterer(re, im, tx, m, sc[o], sc[o + 1], sc[o + 2], sc[o + 3], sc[o + 4], sc[o + 5], sc[o + 6], sc[o + 7], s, exact, sc[o + 8], sc[o + 9], sc[o + 10]);
           }
         }
       }

@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { defaultSettings, derive, type Derived, type RadarConfig, type SimSettings, type WindowType } from '../src/config/radar';
 import { Engine } from '../src/engine/engine';
 import { Synthesizer, type PointScatterer } from '../src/sim/synth';
+import type { Target } from '../src/sim/targets';
 import { makeWindow } from '../src/dsp/window';
 import { Cfar2D, caAlpha, caAlphaGamma, goAlpha, gsAlphaGamma, osAlpha, osAlphaGamma, osRankIndex, soAlpha } from '../src/dsp/cfar';
 import { Detector } from '../src/dsp/detect';
@@ -275,6 +276,96 @@ describe('golden vectors (python reference)', () => {
         }
         return;
       }
+      // ---------- micro-Doppler drone: line-blade (sinc) rotor model (goldenSet 2) ----------
+      if (g.target && g.target.type === 'drone' && g.cube?.re) {
+        const cfg = toConfig(g.config);
+        const d = derive(cfg);
+        const s = toSettings(g);
+        const tgt = g.target;
+        // velocity (0,0,0) + heading 0 → the web forward/right basis equals the Python
+        // rotation (heading 0), so the ported drone reproduces the reference exactly.
+        const target: Target = {
+          id: 1,
+          type: 'drone',
+          x: tgt.position[0],
+          y: tgt.position[1],
+          z: tgt.position[2],
+          vx: tgt.velocity[0],
+          vy: tgt.velocity[1],
+          vz: tgt.velocity[2],
+          rcs: 1,
+          rpm: tgt.rpm,
+          bladeLength: tgt.bladeLength,
+          bladeRoot: tgt.bladeRoot,
+          nRotors: tgt.nRotors,
+          nBlades: tgt.nBlades,
+          armLength: tgt.armLength,
+          rotorZ: tgt.rotorZ,
+          bodyRcs: tgt.bodyRcs,
+          bladeRcs: tgt.bladeRcs,
+        };
+        const cubeRel = T.cubeRelMax ?? 1e-9;
+        if (g.derived) it('derived parameters', () => checkDerived(d, cfg, g.derived, 1e-12, f));
+        it('line-blade (sinc) rotor beat cube (exact and phasor-recurrence synthesis)', () => {
+          const [K, M, N] = g.cube.shape;
+          expect([K, M, N]).toEqual([d.nVirt, cfg.nChirps, cfg.nSamples]);
+          const gr: number[] = g.cube.re.flat(Infinity),
+            gi: number[] = g.cube.im.flat(Infinity);
+          let mx = 0;
+          for (let i = 0; i < gr.length; i++) mx = Math.max(mx, Math.hypot(gr[i], gi[i]));
+          for (const exact of [true, false]) {
+            const n = d.nVirt * cfg.nChirps * cfg.nSamples;
+            const re = new Float64Array(n),
+              im = new Float64Array(n);
+            new Synthesizer(cfg, d).synthTargets(re, im, [target], 0, s, exact);
+            let err = 0,
+              at = 0;
+            for (let i = 0; i < gr.length; i++) {
+              const e = Math.hypot(re[i] - gr[i], im[i] - gi[i]);
+              if (e > err) {
+                err = e;
+                at = i;
+              }
+            }
+            const lim = cubeRel * mx * (exact ? 1 : 100);
+            if (err > lim) {
+              const k = Math.floor(at / (M * N)),
+                m = Math.floor((at % (M * N)) / N);
+              throw new Error(`cube (${exact ? 'exact' : 'fast'}) max|Δ|=${err.toExponential(3)} > ${lim.toExponential(3)} at k=${k} m=${m} n=${at % N}: ts=(${re[at]}, ${im[at]}) py=(${gr[at]}, ${gi[at]})`);
+            }
+          }
+        });
+        if (g.slowTime?.re) {
+          it('micro-Doppler slow-time y[m] at the target range bin (range FFT, Hann, Σw-normalised)', () => {
+            const e = new Engine(cfg, s, [target]);
+            e.synthesizeAndTransform(true); // range FFT in place → cubeRe/cubeIm (K×M×N)
+            const M = cfg.nChirps,
+              N = cfg.nSamples;
+            const rb = g.slowTime.rangeBin,
+              ch = g.slowTime.channel ?? 0;
+            const gr: number[] = g.slowTime.re,
+              gi: number[] = g.slowTime.im;
+            expect(gr.length).toBe(M);
+            let mx = 0;
+            for (let i = 0; i < gr.length; i++) mx = Math.max(mx, Math.hypot(gr[i], gi[i]));
+            const rel = T.slowTimeRelMax ?? 1e-9;
+            let err = 0,
+              at = 0;
+            for (let m = 0; m < M; m++) {
+              const j = (ch * M + m) * N + rb;
+              const er = Math.hypot(e.cubeRe[j] - gr[m], e.cubeIm[j] - gi[m]);
+              if (er > err) {
+                err = er;
+                at = m;
+              }
+            }
+            const j = (ch * M + at) * N + rb;
+            expect(err, `slow-time m=${at}: ts=(${e.cubeRe[j]}, ${e.cubeIm[j]}) py=(${gr[at]}, ${gi[at]})`).toBeLessThanOrEqual(rel * mx);
+          });
+        }
+        return;
+      }
+
       if (!g.config) return;
       // brief rev. 1 flipped the spatial-phase sign; scenario vectors older than v2 are stale
       if ((g.conventionVersion ?? 1) < 2) {

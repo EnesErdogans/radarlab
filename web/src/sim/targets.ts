@@ -1,6 +1,11 @@
 // Target models. Each target expands into point scatterers whose position and
 // velocity are evaluated analytically at any time t (relative to the target's
-// reference state). Output stride per scatterer: [px,py,pz,vx,vy,vz,rcs,phase0].
+// reference state). Output stride per scatterer:
+//   [px,py,pz, vx,vy,vz, rcs, phase0, segx,segy,segz].
+// A non-zero segment vector (segx,segy,segz) marks a uniform *line* scatterer of
+// that length/direction centred at the position (e.g. a rotor blade): the
+// synthesiser weights its amplitude by sinc(Φ), Φ = (2π/λ)·(seg·û_LOS), the
+// Martin & Mulgrew (1990) closed-form uniform-blade integral (see synth.ts).
 
 export type TargetType = 'point' | 'car' | 'pedestrian' | 'drone' | 'bird';
 export const TARGET_TYPES: TargetType[] = ['point', 'car', 'pedestrian', 'drone', 'bird'];
@@ -16,12 +21,19 @@ export interface Target {
   vz: number;
   rcs: number; // total RCS [m²]
   rpm?: number; // drone rotor speed
-  bladeLength?: number; // drone blade length [m]
+  bladeLength?: number; // drone blade length L [m] (tip radius)
+  bladeRoot?: number; // drone blade root radius r0 [m] (default 0)
   nRotors?: number;
+  nBlades?: number; // blades per rotor (default 2)
+  armLength?: number; // drone arm length (rotor hub offset) [m]
+  rotorZ?: number; // rotor-plane height above the body centre [m]
+  bodyRcs?: number; // drone body RCS [m²] (absolute); UI default = rcs·0.8
+  bladeRcs?: number; // per-blade peak (flash) RCS [m²]; UI default splits rcs·0.2
   flapHz?: number; // bird flapping frequency
 }
 
-export const STRIDE = 8;
+// px,py,pz, vx,vy,vz, rcs, phase0, segx,segy,segz
+export const STRIDE = 11;
 
 export function defaultTarget(type: TargetType, id: number, x = 0, y = 20): Target {
   const base: Target = { id, type, x, y, z: 0, vx: 0, vy: 0, vz: 0, rcs: 1 };
@@ -33,7 +45,7 @@ export function defaultTarget(type: TargetType, id: number, x = 0, y = 20): Targ
     case 'pedestrian':
       return { ...base, z: 0, vx: 1.2, rcs: 0.5 };
     case 'drone':
-      return { ...base, z: 2, vy: -2, rcs: 0.05, rpm: 6000, bladeLength: 0.12, nRotors: 4 };
+      return { ...base, z: 2, vy: -2, rcs: 0.05, rpm: 6000, bladeLength: 0.12, nRotors: 4, nBlades: 2 };
     case 'bird':
       return { ...base, z: 3, vx: 6, rcs: 0.02, flapHz: 6 };
   }
@@ -48,7 +60,8 @@ export function scattererCount(t: Target): number {
     case 'pedestrian':
       return 6;
     case 'drone':
-      return 1 + (t.nRotors ?? 4) * 4;
+      // line-blade model: body + one line scatterer per blade
+      return 1 + (t.nRotors ?? 4) * (t.nBlades ?? 2);
     case 'bird':
       return 3;
   }
@@ -95,7 +108,19 @@ export function evalTarget(tg: Target, t: number, out: Float64Array, off: number
   const rx = fy,
     ry = -fx;
   let o = off;
-  const put = (px: number, py: number, pz: number, vx: number, vy: number, vz: number, rcs: number, ph: number) => {
+  const put = (
+    px: number,
+    py: number,
+    pz: number,
+    vx: number,
+    vy: number,
+    vz: number,
+    rcs: number,
+    ph: number,
+    sx = 0,
+    sy = 0,
+    sz = 0,
+  ) => {
     out[o] = px;
     out[o + 1] = py;
     out[o + 2] = pz;
@@ -104,6 +129,9 @@ export function evalTarget(tg: Target, t: number, out: Float64Array, off: number
     out[o + 5] = vz;
     out[o + 6] = rcs;
     out[o + 7] = ph;
+    out[o + 8] = sx;
+    out[o + 9] = sy;
+    out[o + 10] = sz;
     o += STRIDE;
   };
   switch (tg.type) {
@@ -161,24 +189,53 @@ export function evalTarget(tg: Target, t: number, out: Float64Array, off: number
       break;
     }
     case 'drone': {
+      // Line-blade (sinc) rotor model (Martin & Mulgrew 1990), matching the Python
+      // reference radarlab.scene.Drone with blade_model='line'. Each blade is one
+      // uniform line scatterer centred at radius r0+ℓ/2 (ℓ = L−r0), its segment
+      // vector ℓ·(cosψ, sinψ, 0) in the rotor plane; the synthesiser applies the
+      // sinc(Φ) flash weighting. Body frame: x right, y forward, z up, rotated by
+      // the heading (right = (rx,ry), forward = (fx,fy)) exactly as the car/pedestrian.
       const nR = tg.nRotors ?? 4;
+      const nB = tg.nBlades ?? 2;
       const L = tg.bladeLength ?? 0.12;
-      const om = ((tg.rpm ?? 6000) / 60) * 2 * Math.PI;
-      put(bx, by, bz, tg.vx, tg.vy, tg.vz, tg.rcs * 0.8, 0);
-      const bladeRcs = (tg.rcs * 0.2) / (nR * 4);
+      const r0b = tg.bladeRoot ?? 0;
+      const arm = tg.armLength ?? 0.25;
+      const rotorZ = tg.rotorZ ?? 0.05;
+      const bodyRcs = tg.bodyRcs ?? tg.rcs * 0.8;
+      const bladeRcs = tg.bladeRcs ?? (tg.rcs * 0.2) / (nR * nB);
+      const ell = L - r0b;
+      const radius = r0b + 0.5 * ell; // blade-centre radius
+      const omega = ((tg.rpm ?? 6000) / 60) * 2 * Math.PI;
+      put(bx, by, bz, tg.vx, tg.vy, tg.vz, bodyRcs, 0);
       for (let i = 0; i < nR; i++) {
-        const armAng = (2 * Math.PI * (i + 0.5)) / nR;
-        const hx = bx + 0.22 * Math.cos(armAng),
-          hy = by + 0.22 * Math.sin(armAng),
-          hz = bz + 0.05;
-        const dir = i % 2 === 0 ? 1 : -1; // counter-rotating pairs
-        for (let b = 0; b < 2; b++) {
-          const ang = dir * om * tm + b * Math.PI + i * 0.7;
-          const ca = Math.cos(ang),
-            sa = Math.sin(ang);
-          for (const rho of [0.5 * L, L]) {
-            put(hx + rho * ca, hy + rho * sa, hz, tg.vx - dir * om * rho * sa, tg.vy + dir * om * rho * ca, tg.vz, bladeRcs, i + b + rho);
-          }
+        // rotor hub offset (body frame): arm at π/4 + 2πi/nR, raised by rotorZ
+        const armAng = Math.PI / 4 + (2 * Math.PI * i) / nR;
+        const ox = arm * Math.cos(armAng), // right component
+          oy = arm * Math.sin(armAng); // forward component
+        const om = (i % 2 === 0 ? 1 : -1) * omega; // alternating spin per rotor
+        for (let b = 0; b < nB; b++) {
+          const psi = (2 * Math.PI * b) / nB + om * tm;
+          const cp = Math.cos(psi),
+            sp = Math.sin(psi);
+          const pr = ox + radius * cp, // blade-centre right
+            pf = oy + radius * sp; // blade-centre forward
+          const vr = -radius * sp * om, // right velocity
+            vf = radius * cp * om; // forward velocity
+          const sr = ell * cp, // segment right
+            sf = ell * sp; // segment forward
+          put(
+            bx + pf * fx + pr * rx,
+            by + pf * fy + pr * ry,
+            bz + rotorZ,
+            tg.vx + vf * fx + vr * rx,
+            tg.vy + vf * fy + vr * ry,
+            tg.vz,
+            bladeRcs,
+            0,
+            sf * fx + sr * rx,
+            sf * fy + sr * ry,
+            0,
+          );
         }
       }
       break;

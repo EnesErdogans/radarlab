@@ -24,6 +24,7 @@ the generated map itself is stored.
 | `cfar_maps.json` | two 20×16 power maps (K = 1 and K = 8) | **CA/GO/SO/OS thresholds, per-cell α, detection masks**, training-cell counts incl. range edges (r = 0, 1, Nr−1), GO/SO lead/lag counts and CA-fallback cells, Doppler wrap | rel 1e-9, 0 mask differences |
 | `clustering.json` | 12×10 mask + power map | 8-connected clustering with Doppler wrap: peak cell, size, member cells | exact |
 | `tracker.json` | 12 frames of [R, θ, vr] | Python EKF-CV tracker: state, covariance, status, hit history per frame | 1e-9 |
+| `microdoppler_drone.json` | fully-specified `Drone` (`target`) + full cube | **line-blade (sinc) rotor model**: beat cube and the range-FFT **slow-time** `y[m]` at the target range bin (rotor flashes) | cube 1e-9 of max, slow-time 1e-9 of max |
 
 ### Truth tolerances (scenario files)
 
@@ -43,10 +44,26 @@ Each peak carries `truth` values. Two kinds of truth are stored:
 
 The engine-to-engine tolerances (`*Abs` without `truth`) are 1e-6 or tighter.
 
+### Micro-Doppler drone (`microdoppler_drone.json`, goldenSet 2)
+
+A fully-specified, RNG-free `radarlab.scene.Drone` with `blade_model='line'` (the Martin &
+Mulgrew 1990 uniform line-blade closed form): each blade is one line scatterer centred at
+`r0+(L−r0)/2`, segment `(L−r0)·(cosψ, sinψ, 0)` in the rotor plane, amplitude-weighted by
+`sinc(Φ)`, `Φ = (2π/λ)·(seg·p̂)`. All drone parameters are stored under `target`
+(`random_blade_phase=False`, `rpm_jitter=0`, `heading=0`), so both engines reproduce every
+blade trajectory and flash. Stored: the full noiseless beat `cube` and the range-FFT
+**slow-time** `y[m] = range_fft(cube,'hann')[0, m, rangeBin]` at the target range bin, which
+carries the rotor-flash modulation. `microDoppler` records the tip speed, flash rate
+(`N_b·f_rot`, even `N_b`) and `2·v_tip/λ` extent for reference. The web engine reproduces it
+with the ported line-blade model (`sim/targets.ts` drone branch + the sinc weighting in
+`sim/synth.ts`), matching within 1e-9 of the cube/slow-time maximum.
+
 ## Not covered (known gaps)
 
-* Noise, Swerling fluctuation, phase noise, impairments (IQ imbalance, leakage, quantisation,
-  interference, multipath) and micro-Doppler targets. These are random or exist only in Python.
+* Noise, Swerling fluctuation, phase noise and impairments (IQ imbalance, leakage, quantisation,
+  interference, multipath). These are random or exist only in Python. The deterministic
+  **line-blade drone** micro-Doppler slow-time *is* covered (`microdoppler_drone.json`); the
+  pedestrian/bird micro-motion models are not yet.
 * The interactive **web tracker** is a different design from the Python tracker. It uses a 2-D
   position gate, a different Q, and spawn suppression with `mergeDetections`. `tracker.json`
   specifies the Python reference. The web suite checks it with `ReferenceTracker`, a TS port of
@@ -67,3 +84,5 @@ The engine-to-engine tolerances (`*Abs` without `truth`) are 1e-6 or tighter.
   tolerances and adds the observable-truth fields. Parabolic peak interpolation now follows the web
   rule: the offset is 0 when the 3-point fit is not concave. Conventions are unchanged
   (`conventionVersion` 2).
+* Set 2 (2026-11-26, roadmap A3): adds `microdoppler_drone.json`, the first micro-Doppler
+  cross-language vector — the line-blade (sinc) rotor model's beat cube and range-FFT slow-time.

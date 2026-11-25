@@ -37,7 +37,7 @@ import numpy as np
 
 from . import dsp
 from .config import C0, PRESETS, RadarConfig
-from .scene import PointTarget, Scene
+from .scene import Drone, PointTarget, Scene
 from .signal import amplitude, synthesize_cube
 
 CONVENTION_VERSION = 2       # brief REVISION 1: negative spatial phase, +j angle kernel
@@ -465,6 +465,77 @@ def case_tracker() -> dict[str, Any]:
             "measurements": frames, "frames": out, "tolerances": {"stateAbs": 1e-9, "covRel": 1e-9}}
 
 
+# ----------------------------------------------------------- micro-Doppler (line-blade rotor)
+def md_drone_config() -> RadarConfig:
+    """Small deterministic 1TX×1RX 24 GHz config for a drone micro-Doppler slow-time
+    sequence (K=1, M=128, N=16; ΔR≈0.75 m, Rmax≈12 m, frame = M·Te gap-free)."""
+    n, fs = 16, 4e6
+    slope = 200e6 / (n / fs)
+    return RadarConfig(fc=24e9, slope=slope, fs=fs, n_samples=n, chirp_period=80e-6,
+                       n_chirps=128, tx_pos=np.array([0.0]), rx_pos=np.array([0.0]),
+                       adc_start_time=2e-6, idle_time=5e-6, frame_period=128 * 80e-6,
+                       iq_mode="complex", name="md_drone")
+
+
+# Fully specified, RNG-free drone (random_blade_phase=False, rpm_jitter=0, heading=0),
+# so both engines reproduce every blade trajectory and the sinc flash weighting.
+MD_DRONE = dict(position=(0.0, 6.0, 0.0), velocity=(0.0, 0.0, 0.0), n_rotors=2, n_blades=2,
+                rpm=9000.0, blade_length=0.10, blade_root=0.0, arm_length=0.2,
+                body_rcs=0.05, blade_rcs=0.02, blade_model="line", rpm_jitter=0.0,
+                random_blade_phase=False, heading=0.0)
+
+
+def _md_target_block() -> dict[str, Any]:
+    p = MD_DRONE
+    return {"type": "drone", "position": list(p["position"]), "velocity": list(p["velocity"]),
+            "heading": p["heading"], "nRotors": p["n_rotors"], "nBlades": p["n_blades"],
+            "rpm": p["rpm"], "bladeLength": p["blade_length"], "bladeRoot": p["blade_root"],
+            "armLength": p["arm_length"], "rotorZ": 0.05, "bodyRcs": p["body_rcs"],
+            "bladeRcs": p["blade_rcs"], "bladeModel": p["blade_model"],
+            "note": "rotorZ=0.05 m and the rotor-hub angles pi/4 + 2*pi*i/nRotors are the "
+                    "scene.Drone defaults; rotor i spins at (-1)^i * 2*pi*rpm/60; blade k at "
+                    "angle 2*pi*k/nBlades + spin*t; one line scatterer per blade centred at "
+                    "r0+(L-r0)/2 with segment (L-r0)*(cos,sin,0) in the rotor plane."}
+
+
+def case_microdoppler_drone() -> dict[str, Any]:
+    from .dsp.fft import range_fft
+    cfg = md_drone_config()
+    drone = Drone(**MD_DRONE)
+    cube = synthesize_cube(cfg, Scene([drone]), 0.0, "snr", SNR_REF_DB, REF_RANGE, noise=False)
+    rf = range_fft(cube, "hann")                                  # (K, M, Nr), Σw-normalised
+    r0 = int(np.argmax((np.abs(rf) ** 2).sum(axis=(0, 1))))       # target range bin
+    y = rf[0, :, r0]                                              # slow-time at channel 0
+    return {
+        "name": "microdoppler_drone", "goldenSet": GOLDEN_SET, "conventionVersion": CONVENTION_VERSION,
+        "description": "Drone micro-Doppler slow-time sequence: line-blade (sinc) rotor model "
+                       "(Martin & Mulgrew 1990) in scene.Drone(blade_model='line'). 2 rotors x 2 "
+                       "blades, 9000 rpm, hovering at 6 m boresight. Each blade is one uniform line "
+                       "scatterer weighted by sinc(Phi), Phi = (2*pi/lambda)*(seg . p_hat); the "
+                       "rotor flashes modulate the slow-time signal. Stored: the full noiseless beat "
+                       "cube and the range-FFT slow-time y[m] at the target range bin (Hann range "
+                       "window, Sigma(w)-normalised). The web engine reproduces it via the ported "
+                       "line-blade model (sim/targets.ts drone + the sinc weighting in sim/synth.ts).",
+        "config": cfg.to_dict(), "derived": cfg.derived(),
+        "amplitudeMode": "snr", "snrRefDb": SNR_REF_DB, "refRange": REF_RANGE, "noise": False, "tFrame": 0.0,
+        "target": _md_target_block(),
+        "microDoppler": {
+            "omegaRadPerS": [float(v) for v in drone.omega],
+            "tipSpeed": float(drone.tip_speed[0]),
+            "flashRateHz": [float(v) for v in drone.flash_rate()],
+            "maxMicroDopplerHz": float(2 * drone.tip_speed[0] / cfg.wavelength),
+            "rotationsPerFrame": float(drone.omega[0] / (2 * np.pi) * cfg.frame_active_time),
+            "note": "flash rate = N_b*f_rot (even N_b); max micro-Doppler 2*v_tip/lambda (may alias: "
+                    "|v_tip| > vmax here, as for real counter-UAS geometries)."},
+        "cube": {"shape": list(cube.shape), "re": _rounded(cube.real), "im": _rounded(np.imag(cube))},
+        "slowTime": {"rangeBin": r0, "channel": 0,
+                     "note": "y[m] = range_fft(cube, 'hann')[0, m, rangeBin]; the micro-Doppler "
+                             "slow-time signal (before the Doppler FFT).",
+                     "re": _rounded(y.real), "im": _rounded(y.imag)},
+        "tolerances": {"cubeRelMax": 1e-9, "slowTimeRelMax": 1e-9},
+    }
+
+
 ALL_CASES = {
     "tiny_cube": case_tiny,
     "automotive_single": case_automotive_single,
@@ -479,6 +550,7 @@ ALL_CASES = {
     "cfar_maps": case_cfar_maps,
     "clustering": case_clustering,
     "tracker": case_tracker,
+    "microdoppler_drone": case_microdoppler_drone,
 }
 
 
