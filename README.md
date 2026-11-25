@@ -254,7 +254,7 @@ where $I_u(a,b)$ is the regularised incomplete beta function, so $u$ = `scipy.sp
 | 4 | 4.5 dB | 4.2 dB | 4.1 dB |
 | 8 | 6.1 dB | 5.7 dB | 5.6 dB |
 
-So for K = 4–8 virtual channels and N = 16–32 training cells, the single-channel formula sets the threshold 4.1–6.1 dB too high. The detector then works at a much lower false-alarm rate than designed (about 5·10⁻¹³ instead of 10⁻⁴ in the reviewer's calculation) and loses a comparable amount of detection SNR (3.9–7.4 dB for Pd = 0.5–0.9).
+So for K = 4–8 virtual channels and N = 16–32 training cells, the single-channel formula sets the threshold 4.1–6.1 dB too high. The detector then works at a much lower false-alarm rate than designed (about 4–6·10⁻¹³ for K = 4 and about 10⁻²³ for K = 8, instead of the design value 10⁻⁴; computed by `python/examples/paper/`) and loses a comparable amount of detection SNR (3.9–7.4 dB for Pd = 0.5–0.9).
 
 **What is new and what is not.** The exact thresholds are not a new theory. Under non-coherent integration of M pulses or K channels the noise is Gamma distributed, and CFAR analyses for this case are classical; see, for example, Shor and Levanon for CA- and OS-CFAR with pulse integration [37] and Ritcey for the greatest-of (MX-MLD) detector with non-coherent integration [38]. What RadarLab adds is a verified implementation of these thresholds for all four detector types, and a number for the cost of a common pitfall: applying the single-channel formula after summing |X_k|² over the virtual channels.
 
