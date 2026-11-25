@@ -32,4 +32,3 @@ automotive ≈ 50 (≈ 20 fps; synth 22, range FFT 5, Doppler 6, RA map 7, CFAR 
 - Synthesis dominates frame time (compute bound, ~3 GFLOP/s scalar JS); WASM-SIMD would help.
 - Spectrogram concatenates frames (time axis in frames, gaps not shown).
 - Extended targets can still create an extra track briefly; tracker has no IMM.
-- GitHub link is a placeholder (`GITHUB_URL` in `src/main.ts`).
