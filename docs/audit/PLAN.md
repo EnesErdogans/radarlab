@@ -31,6 +31,7 @@ Trigger: the supervising professor found errors (e.g. in micro-Doppler) and says
 | S4 | Detection and CFAR | Gamma(K) thresholds; window effects; Swerling statistics; edge handling; the CFAR-after-beamforming option; Pd/Pfa claims in the paper |
 | S5 | Tracking and point cloud | 2-D versus 3-D state (climbing drone, z velocity); polar-to-Cartesian with elevation; gating and association; track initiation |
 | S6 | Channel and impairments | Ground plane and two-ray multipath (needs height); clutter versus grazing angle; phase noise; leakage; IF filters; ADC; IQ imbalance; DC; interference |
+| S8 | Scattering, materials and RCS | Material permittivity at 24/60/77 GHz, Fresnel and polarization, shape-primitive RCS patterns, aspect dependence of every target model, measured RCS from the literature |
 | S7 | Web parity and visualisation | Whether the UI's 2-D bird's-eye view, the panels and the Learn texts mislead (for example, elevated targets drawn at the wrong x/y, or wrong axis units); Python↔TS behaviour beyond the golden vectors |
 
 ## Test agent (T1): independent of the specialists
@@ -66,3 +67,11 @@ Enes has approved this direction. It starts right after the audit summary exists
 7. **G6 Regenerate golden vectors (conventionVersion 3), update the validation report, README and the paper.**
 
 Every step needs tests for both py and ts, and every finding from the audit needs a test that would have caught it.
+
+### Addendum (Enes): material- and shape-dependent reflection patterns
+Each object reflects differently, depending on its material and its shape. This becomes part of G1 (as **G1b**). Specialist **S8 "Scattering, materials and RCS"** joins the audit and writes the expert brief for it.
+- **Material library.** Frequency-dependent complex permittivity εr(f) and conductivity at 24/60/77 GHz, each with a literature citation. Materials: metal (PEC), car paint over steel, plastic/ABS (drone body, propellers), carbon-fibre propellers, human skin/body (water-rich tissue), bird feathers/body, asphalt/concrete/grass for the ground, glass.
+- **Reflection.** Fresnel reflection coefficients from the material, for both polarizations and as a function of incidence angle. The TX/RX antenna polarization (AWR boards are linear) is included.
+- **Shape primitives.** Each has an analytic monostatic RCS pattern σ(θ, φ, f): sphere, flat plate, cylinder, dihedral, trihedral (corner reflector), and an edge/blade line scatterer (sinc). Composite targets are built from these primitives and carry a material, so the RCS depends on aspect, frequency and material together.
+- **Validation.** Compare with closed-form RCS (Knott, *Radar Cross Section*; Balanis) and with published measured RCS of drones, humans and cars at K/W band. Explain, for example, why carbon blades flash much more strongly than plastic ones. Add golden vectors and tests.
+- **Optional later.** Swerling-like fluctuation that emerges from many-scatterer interference instead of being imposed, and a coarse physical-optics / ray-tracing hook for imported meshes (STL/OBJ).

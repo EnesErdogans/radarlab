@@ -8,6 +8,7 @@ Each scheduled session: clone the repo, read `docs/PROJECT_BRIEF.md`, this file,
 
 ## Phase G — 2-D → 3-D migration (approved by Enes; starts right after 0.1, see docs/audit/PLAN.md)
 - [ ] G0 Design doc docs/design/3d.md + brief Revision 2 (conventionVersion 3)
+- [ ] G1b Materials (εr(f), Fresnel, polarization) + shape primitives with analytic RCS patterns σ(θ,φ,f); targets built from material-tagged primitives; validated vs Knott/Balanis + measured drone/human/car RCS (audit specialist S8)
 - [ ] G1 3-D 6-DoF targets: drone (tilting rotor discs, β-dependent flashes), bird, 3-D pedestrian, cyclist, car box; occlusion
 - [ ] G2 Radar mounting pose + ground plane (true two-ray multipath, grazing-angle clutter)
 - [ ] G3 Az/el element patterns, 2-D virtual arrays, joint az/el DoA, 3-D point cloud
