@@ -42,3 +42,27 @@ Trigger: the supervising professor found errors (e.g. in micro-Doppler) and says
 - Merge all findings into `docs/audit/SUMMARY.md`: de-duplicated, ranked, with a "2-D limitations" section and a fix plan, and send Enes a Turkish summary.
 - Decide the 3-D roadmap: 3-D scene and state, a ground plane, a radar mounting pose, elevation patterns, 3-D tracking, and a 3-D scene view in the UI.
 - No code fixes in this round.
+
+## Follow-up approved by Enes: 2-D → 3-D migration, targets first (ROADMAP Phase G)
+Enes has approved this direction. It starts right after the audit summary exists. The S1/S2/S3/S5/S6 expert briefs serve as its requirement documents.
+1. **G0 Design doc** `docs/design/3d.md`. Contents:
+   - frames: world (ENU, ground z=0), radar mount pose (height, tilt, yaw), target body frame (yaw/pitch/roll plus rates);
+   - conventions: a brief Revision 2 with `conventionVersion` 3;
+   - a migration plan for py/ts/golden;
+   - the list of tests that must catch the audit findings.
+2. **G1 3-D targets (priority):**
+   - Every target has a full 6-DoF pose and trajectory: position/velocity/acceleration in 3-D, attitude and angular rates, and waypoints.
+   - Scatterers are defined in the body frame and rotated to world coordinates.
+   - Drone: rotor discs follow body pitch/roll (a multirotor tilts forward when it moves), real arm geometry, aspect-dependent blade flash (β), hover/climb/forward-flight presets.
+   - Bird: flapping plane from the body attitude; glide/flap.
+   - Pedestrian: full 3-D Boulic/Chen limb kinematics, swing amplitude depending on speed, walking at any heading.
+   - Cyclist: proper wheel, pedal and leg model.
+   - Car: 3-D box scatterers, aspect-dependent RCS.
+   - Simple self-occlusion and visibility.
+3. **G2 Radar pose and environment:** mounting height/tilt; ground plane with true two-ray multipath; clutter depending on grazing angle.
+4. **G3 Antennas and array:** element patterns in azimuth and elevation; 2-D virtual arrays (AWR1843 elevated TX, IWR6843AOP); joint azimuth/elevation DoA; a 3-D point cloud without the cone-angle error.
+5. **G4 Tracking:** 3-D constant-velocity/constant-acceleration EKF with (R, θ, φ, v_r).
+6. **G5 UI:** a 3-D scene view (three.js) with orbit camera, a side view, target editor for z/attitude/trajectory, and an elevation display in the panels.
+7. **G6 Regenerate golden vectors (conventionVersion 3), update the validation report, README and the paper.**
+
+Every step needs tests for both py and ts, and every finding from the audit needs a test that would have caught it.

@@ -6,6 +6,15 @@ Each scheduled session: clone the repo, read `docs/PROJECT_BRIEF.md`, this file,
 - [ ] 0.1 Specialist audit S1–S7 + independent test agent T1 per `docs/audit/PLAN.md` (professor's findings, 2-D/geometry errors). Findings only, no code changes.
 - [ ] 0.2 Enes reviews `docs/audit/SUMMARY.md`; then fix round (each fix with a test that would have caught it) and the 3-D roadmap.
 
+## Phase G — 2-D → 3-D migration (approved by Enes; starts right after 0.1, see docs/audit/PLAN.md)
+- [ ] G0 Design doc docs/design/3d.md + brief Revision 2 (conventionVersion 3)
+- [ ] G1 3-D 6-DoF targets: drone (tilting rotor discs, β-dependent flashes), bird, 3-D pedestrian, cyclist, car box; occlusion
+- [ ] G2 Radar mounting pose + ground plane (true two-ray multipath, grazing-angle clutter)
+- [ ] G3 Az/el element patterns, 2-D virtual arrays, joint az/el DoA, 3-D point cloud
+- [ ] G4 3-D EKF tracker (R, θ, φ, v_r)
+- [ ] G5 Web 3-D scene view (three.js), side view, 3-D target editor
+- [ ] G6 Golden v3, validation report, README and paper updates
+
 ## Phase A — review fixes and parity
 - [x] A1 Fix all critical/major findings in `docs/review/review_round1.md` (re-run the reviewer checks).
 - [x] A2 Web: exact Gamma(K) α for OS/GO/SO (match `golden/cfar_alpha.json` for K=1,4,8); enable those golden rows.
