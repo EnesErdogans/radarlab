@@ -2,6 +2,10 @@
 
 Each scheduled session: clone the repo, read `docs/PROJECT_BRIEF.md`, this file, `docs/review/*.md`, `python/STATUS.md`, `web/STATUS.md`; take the FIRST unchecked item, finish it with tests, tick it here, commit and push. Keep `pytest -m "not slow"`, `npm test` and `npm run build` green. If an item is blocked (needs hardware/user), mark it `[blocked: reason]` and move on.
 
+## Phase 0 — audit round 2 (FIRST, before any other item)
+- [ ] 0.1 Specialist audit S1–S7 + independent test agent T1 per `docs/audit/PLAN.md` (professor's findings, 2-D/geometry errors). Findings only, no code changes.
+- [ ] 0.2 Enes reviews `docs/audit/SUMMARY.md`; then fix round (each fix with a test that would have caught it) and the 3-D roadmap.
+
 ## Phase A — review fixes and parity
 - [x] A1 Fix all critical/major findings in `docs/review/review_round1.md` (re-run the reviewer checks).
 - [x] A2 Web: exact Gamma(K) α for OS/GO/SO (match `golden/cfar_alpha.json` for K=1,4,8); enable those golden rows.
